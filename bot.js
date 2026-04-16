@@ -2,17 +2,22 @@ require("dotenv").config();
 
 const axios = require("axios");
 const cron = require("node-cron");
-const { app, enviarTexto, enviarImagem, normalizarTelefoneBR } = require("./api");
+const {
+  app,
+  enviarTexto,
+  enviarImagem,
+  normalizarTelefoneBR,
+} = require("./api");
 
 // =============================================================================
 // CONFIGURAÇÕES
 // =============================================================================
-const API_BASE_URL = process.env.API_BASE_URL || "https://bot-avseg.onrender.com";
+const API_BASE_URL =
+  process.env.API_BASE_URL || "https://bot-avseg.onrender.com";
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
 const DELAY_ENVIO_MS = 3000;
 
-const IMAGEM_BOAS_VINDAS =
-  process.env.IMAGEM_URL || "https://ibb.co/kgKQnZV2";
+const IMAGEM_BOAS_VINDAS = process.env.IMAGEM_URL || "https://i.postimg.cc/Bn0h8RBQ/imagem.png";
 
 const TEST_MODE = process.env.TEST_MODE === "true";
 const ENABLE_CRON = process.env.ENABLE_CRON === "true";
@@ -20,7 +25,7 @@ const ALLOWED_NUMBERS = new Set(
   String(process.env.ALLOWED_NUMBERS || "")
     .split(",")
     .map((n) => normalizarTelefoneBR(n))
-    .filter(Boolean)
+    .filter(Boolean),
 );
 
 // =============================================================================
@@ -84,17 +89,17 @@ function formatarDataBR(data) {
 function existeLinhaDigitavel(v) {
   return Boolean(
     v?.linhadigitavel &&
-      v.linhadigitavel !== "ND" &&
-      String(v.linhadigitavel).trim() !== ""
+    v.linhadigitavel !== "ND" &&
+    String(v.linhadigitavel).trim() !== "",
   );
 }
 
 function existeBoletoDisponivel(v) {
   return Boolean(
     (v?.url && v.url !== "ND") ||
-      (v?.linhadigitavel && v.linhadigitavel !== "ND") ||
-      (v?.valor && v.valor !== "ND") ||
-      (v?.vencimento && v.vencimento !== "ND")
+    (v?.linhadigitavel && v.linhadigitavel !== "ND") ||
+    (v?.valor && v.valor !== "ND") ||
+    (v?.vencimento && v.vencimento !== "ND"),
   );
 }
 
@@ -121,7 +126,10 @@ async function enviarTextoSeguro(to, texto) {
     await enviarTexto(numero, texto);
     console.log(`✅ Texto enviado para ${numero}`);
   } catch (erro) {
-    console.error(`❌ Erro ao enviar texto para ${numero}:`, erro.response?.data || erro.message);
+    console.error(
+      `❌ Erro ao enviar texto para ${numero}:`,
+      erro.response?.data || erro.message,
+    );
   }
 }
 
@@ -141,7 +149,10 @@ async function enviarImagemSegura(to, imageUrl, caption = "") {
     await enviarImagem(numero, imageUrl, caption);
     console.log(`✅ Imagem enviada para ${numero}`);
   } catch (erro) {
-    console.error(`❌ Erro ao enviar imagem para ${numero}:`, erro.response?.data || erro.message);
+    console.error(
+      `❌ Erro ao enviar imagem para ${numero}:`,
+      erro.response?.data || erro.message,
+    );
   }
 }
 
@@ -238,7 +249,12 @@ function montarMensagemNotificacao(item) {
 async function enviarMenu(numero, cliente) {
   let saudacao = `👋 *AVSEG Proteção Veicular*\n\n`;
 
-  if (cliente && !cliente.erro && Array.isArray(cliente.veiculos) && cliente.veiculos.length) {
+  if (
+    cliente &&
+    !cliente.erro &&
+    Array.isArray(cliente.veiculos) &&
+    cliente.veiculos.length
+  ) {
     saudacao += `Olá *${cliente.nome || "Associado"}*!\n\n🚗 *Seus veículos:*\n\n`;
     cliente.veiculos.forEach((v, i) => {
       saudacao += `${i + 1}️⃣ Placa: ${v.placa || "ND"}\n📅 Vencimento: ${v.vencimento || "ND"}\n\n`;
@@ -260,7 +276,9 @@ async function enviarMenu(numero, cliente) {
 // PROCESSAMENTO DE MENSAGENS
 // =============================================================================
 app.on("wa_message", async ({ from, bodyText }) => {
-  const texto = String(bodyText || "").toLowerCase().trim();
+  const texto = String(bodyText || "")
+    .toLowerCase()
+    .trim();
   const http = axiosInterno();
 
   if (texto === "0" || texto === "parar") {
@@ -268,7 +286,7 @@ app.on("wa_message", async ({ from, bodyText }) => {
     estadoUsuario[from] = null;
     await enviarTextoSeguro(
       from,
-      `✅ *Notificações preventivas desativadas.*\n\nVocê não receberá mais os lembretes de 5 e 2 dias antes do vencimento.\n\nSe quiser voltar a receber, digite *voltar*.`
+      `✅ *Notificações preventivas desativadas.*\n\nVocê não receberá mais os lembretes de 5 e 2 dias antes do vencimento.\n\nSe quiser voltar a receber, digite *voltar*.`,
     );
     return;
   }
@@ -278,7 +296,7 @@ app.on("wa_message", async ({ from, bodyText }) => {
     estadoUsuario[from] = null;
     await enviarTextoSeguro(
       from,
-      `✅ *Notificações ativadas com sucesso.*\n\nVocê voltará a receber nossos lembretes preventivos. Obrigado!`
+      `✅ *Notificações ativadas com sucesso.*\n\nVocê voltará a receber nossos lembretes preventivos. Obrigado!`,
     );
     return;
   }
@@ -299,7 +317,10 @@ app.on("wa_message", async ({ from, bodyText }) => {
   }
 
   if (texto === "1") {
-    await enviarTextoSeguro(from, `📋 *Cotação*\n\nVou encaminhar você para um atendente agora.`);
+    await enviarTextoSeguro(
+      from,
+      `📋 *Cotação*\n\nVou encaminhar você para um atendente agora.`,
+    );
     return;
   }
 
@@ -307,7 +328,7 @@ app.on("wa_message", async ({ from, bodyText }) => {
     estadoUsuario[from] = "pagamento";
     await enviarTextoSeguro(
       from,
-      `💳 *Pagamentos*\n\nEnvie:\n\n• CPF do titular\n• CNPJ\nou\n• Placa do veículo`
+      `💳 *Pagamentos*\n\nEnvie:\n\n• CPF do titular\n• CNPJ\nou\n• Placa do veículo`,
     );
     return;
   }
@@ -315,7 +336,7 @@ app.on("wa_message", async ({ from, bodyText }) => {
   if (texto === "3") {
     await enviarTextoSeguro(
       from,
-      `🚨 *Roubo ou Furto de Veículo*\n\nPara agilizar seu atendimento, entre em contato com nossa central 24h:\n\n📞 *0800 130-0078*\n\nNossa equipe irá te orientar imediatamente. Estamos à disposição! 🤝`
+      `🚨 *Roubo ou Furto de Veículo*\n\nPara agilizar seu atendimento, entre em contato com nossa central 24h:\n\n📞 *0800 130-0078*\n\nNossa equipe irá te orientar imediatamente. Estamos à disposição! 🤝`,
     );
     return;
   }
@@ -323,7 +344,7 @@ app.on("wa_message", async ({ from, bodyText }) => {
   if (texto === "4") {
     await enviarTextoSeguro(
       from,
-      `👨‍💻 *Atendente*\n\nUm atendente humano irá continuar seu atendimento em breve.`
+      `👨‍💻 *Atendente*\n\nUm atendente humano irá continuar seu atendimento em breve.`,
     );
     return;
   }
@@ -332,7 +353,7 @@ app.on("wa_message", async ({ from, bodyText }) => {
     estadoUsuario[from] = null;
     await enviarTextoSeguro(
       from,
-      `✅ *Conversa encerrada.*\n\nQuando quiser falar novamente, é só enviar *oi* ou *menu*.`
+      `✅ *Conversa encerrada.*\n\nQuando quiser falar novamente, é só enviar *oi* ou *menu*.`,
     );
     return;
   }
@@ -352,7 +373,10 @@ app.on("wa_message", async ({ from, bodyText }) => {
         payload.tipo = 3;
         payload.cnpj = somenteNumeros;
       } else {
-        await enviarTextoSeguro(from, "❌ Envie uma placa, CPF ou CNPJ válido.");
+        await enviarTextoSeguro(
+          from,
+          "❌ Envie uma placa, CPF ou CNPJ válido.",
+        );
         return;
       }
 
@@ -365,7 +389,7 @@ app.on("wa_message", async ({ from, bodyText }) => {
         if (!dados) {
           await enviarTextoSeguro(
             from,
-            "❌ Não consegui consultar seu boleto agora. Tente novamente em instantes."
+            "❌ Não consegui consultar seu boleto agora. Tente novamente em instantes.",
           );
           estadoUsuario[from] = null;
           return;
@@ -381,11 +405,17 @@ app.on("wa_message", async ({ from, bodyText }) => {
 
         for (const v of veiculosComLinha) {
           await delay(500);
-          await enviarTextoSeguro(from, String(v.linhadigitavel).replace(/\s+/g, ""));
+          await enviarTextoSeguro(
+            from,
+            String(v.linhadigitavel).replace(/\s+/g, ""),
+          );
         }
 
         await delay(500);
-        await enviarTextoSeguro(from, "Digite *5* para encerrar ou *menu* para voltar ao início.");
+        await enviarTextoSeguro(
+          from,
+          "Digite *5* para encerrar ou *menu* para voltar ao início.",
+        );
         estadoUsuario[from] = null;
         return;
       }
@@ -393,13 +423,23 @@ app.on("wa_message", async ({ from, bodyText }) => {
       if (dados?.status === "erro" && dados?.mensagemWhatsapp) {
         await enviarTextoSeguro(from, dados.mensagemWhatsapp);
         await delay(500);
-        await enviarTextoSeguro(from, "Digite *5* para encerrar ou *menu* para voltar ao início.");
+        await enviarTextoSeguro(
+          from,
+          "Digite *5* para encerrar ou *menu* para voltar ao início.",
+        );
         estadoUsuario[from] = null;
         return;
       }
 
-      if (!dados || !Array.isArray(dados.veiculos) || dados.veiculos.length === 0) {
-        await enviarTextoSeguro(from, `❌ ${dados?.mensagem || "Nenhum registro encontrado."}`);
+      if (
+        !dados ||
+        !Array.isArray(dados.veiculos) ||
+        dados.veiculos.length === 0
+      ) {
+        await enviarTextoSeguro(
+          from,
+          `❌ ${dados?.mensagem || "Nenhum registro encontrado."}`,
+        );
         estadoUsuario[from] = null;
         return;
       }
@@ -409,7 +449,7 @@ app.on("wa_message", async ({ from, bodyText }) => {
       if (comBoleto.length === 0) {
         await enviarTextoSeguro(
           from,
-          `⚠️ ${dados?.mensagem || "Cadastro encontrado, mas não há boleto em aberto no momento."}`
+          `⚠️ ${dados?.mensagem || "Cadastro encontrado, mas não há boleto em aberto no momento."}`,
         );
         estadoUsuario[from] = null;
         return;
@@ -421,19 +461,25 @@ app.on("wa_message", async ({ from, bodyText }) => {
 
         if (existeLinhaDigitavel(v)) {
           await delay(500);
-          await enviarTextoSeguro(from, String(v.linhadigitavel).replace(/\s+/g, ""));
+          await enviarTextoSeguro(
+            from,
+            String(v.linhadigitavel).replace(/\s+/g, ""),
+          );
         }
 
         await delay(DELAY_ENVIO_MS);
       }
 
-      await enviarTextoSeguro(from, "Digite *5* para encerrar ou *menu* para voltar ao início.");
+      await enviarTextoSeguro(
+        from,
+        "Digite *5* para encerrar ou *menu* para voltar ao início.",
+      );
       estadoUsuario[from] = null;
     } catch (erro) {
       console.error("Erro no fluxo de pagamento:", erro.message);
       await enviarTextoSeguro(
         from,
-        "❌ Não consegui consultar seu boleto agora. Tente novamente em instantes."
+        "❌ Não consegui consultar seu boleto agora. Tente novamente em instantes.",
       );
       estadoUsuario[from] = null;
     }
@@ -443,7 +489,7 @@ app.on("wa_message", async ({ from, bodyText }) => {
 
   await enviarTextoSeguro(
     from,
-    `Não entendi sua mensagem. Digite *menu* para ver as opções disponíveis.`
+    `Não entendi sua mensagem. Digite *menu* para ver as opções disponíveis.`,
   );
 });
 
@@ -483,7 +529,10 @@ if (ENABLE_CRON) {
 
       console.log("✅ Rotina de notificações concluída.");
     } catch (erro) {
-      console.error("❌ Erro na rotina de notificações:", erro.response?.data || erro.message);
+      console.error(
+        "❌ Erro na rotina de notificações:",
+        erro.response?.data || erro.message,
+      );
     }
   });
 
