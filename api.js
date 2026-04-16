@@ -150,6 +150,9 @@ app.get("/webhook", (req, res) => {
 // WEBHOOK — recebimento de mensagens (POST)
 // =============================================================================
 app.post("/webhook", (req, res) => {
+  console.log("WEBHOOK RECEBIDO");
+  console.log(JSON.stringify(req.body, null, 2));
+
   res.sendStatus(200);
 
   const body = req.body;
@@ -175,8 +178,7 @@ app.post("/webhook", (req, res) => {
 
   app.emit("wa_message", { from, bodyText, msgType, message, value });
 });
-console.log("WEBHOOK RECEBIDO");
-console.log(JSON.stringify(req.body, null, 2));
+
 // =============================================================================
 // ENVIO DE MENSAGEM
 // =============================================================================
