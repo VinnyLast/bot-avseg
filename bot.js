@@ -17,7 +17,7 @@ const API_BASE_URL =
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
 const DELAY_ENVIO_MS = 3000;
 
-const IMAGEM_BOAS_VINDAS = process.env.IMAGEM_URL || "https://i.postimg.cc/Bn0h8RBQ/imagem.png";
+const IMAGEM_BOAS_VINDAS = process.env.IMAGEM_URL || "https://raw.githubusercontent.com/VinnyLast/bot-avseg/refs/heads/main/imagem.jpg";
 
 const TEST_MODE = process.env.TEST_MODE === "true";
 const ENABLE_CRON = process.env.ENABLE_CRON === "true";
