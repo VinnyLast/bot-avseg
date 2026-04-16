@@ -5,7 +5,7 @@ const cron = require("node-cron");
 const {
   app,
   enviarTexto,
-  enviarImagem,
+  //enviarImagem,
   normalizarTelefoneBR,
 } = require("./api");
 
