@@ -183,41 +183,61 @@ app.post("/webhook", (req, res) => {
 const API_VERSION = process.env.WA_API_VERSION || "v25.0";
 
 async function enviarTexto(to, texto) {
-  await axios.post(
-    `https://graph.facebook.com/${API_VERSION}/${WA_PHONE_ID}/messages`,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "text",
-      text: { body: texto },
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${WA_TOKEN}`,
-        "Content-Type": "application/json",
+  try {
+    console.log(`--- TENTANDO ENVIAR TEXTO ---`);
+    console.log(`Para: ${to}`);
+    console.log(`Versão API: v25.0`);
+
+    const response = await axios.post(
+      `https://graph.facebook.com/v25.0/${WA_PHONE_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to: to, // O número que o bot recebeu
+        type: "text",
+        text: { body: texto },
       },
-      timeout: 15000,
-    }
-  );
+      {
+        headers: {
+          Authorization: `Bearer ${WA_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      }
+    );
+
+    console.log(`✅ SUCESSO META:`, response.data);
+  } catch (erro) {
+    console.error(`❌ ERRO DETALHADO DA META:`, erro.response?.data || erro.message);
+  }
 }
 
 async function enviarImagem(to, imageUrl, caption = "") {
-  await axios.post(
-    `https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "image",
-      image: { link: imageUrl, caption },
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${WA_TOKEN}`,
-        "Content-Type": "application/json",
+  try {
+    console.log(`--- TENTANDO ENVIAR IMAGEM ---`);
+    console.log(`Para: ${to}`);
+    console.log(`URL da Imagem: ${imageUrl}`);
+
+    const response = await axios.post(
+      `https://graph.facebook.com/v25.0/${WA_PHONE_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to: to,
+        type: "image",
+        image: { link: imageUrl, caption },
       },
-      timeout: 15000,
-    }
-  );
+      {
+        headers: {
+          Authorization: `Bearer ${WA_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      }
+    );
+
+    console.log(`✅ IMAGEM ENVIADA:`, response.data);
+  } catch (erro) {
+    console.error(`❌ ERRO IMAGEM META:`, erro.response?.data || erro.message);
+  }
 }
 
 // =============================================================================
