@@ -175,7 +175,8 @@ app.post("/webhook", (req, res) => {
 
   app.emit("wa_message", { from, bodyText, msgType, message, value });
 });
-
+console.log("WEBHOOK RECEBIDO");
+console.log(JSON.stringify(req.body, null, 2));
 // =============================================================================
 // ENVIO DE MENSAGEM
 // =============================================================================
