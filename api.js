@@ -180,9 +180,11 @@ app.post("/webhook", (req, res) => {
 // =============================================================================
 // ENVIO DE MENSAGEM
 // =============================================================================
+const API_VERSION = process.env.WA_API_VERSION || "v25.0";
+
 async function enviarTexto(to, texto) {
   await axios.post(
-    `https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`,
+    `https://graph.facebook.com/${API_VERSION}/${WA_PHONE_ID}/messages`,
     {
       messaging_product: "whatsapp",
       to,

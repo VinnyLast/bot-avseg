@@ -7,12 +7,12 @@ const { app, enviarTexto, enviarImagem, normalizarTelefoneBR } = require("./api"
 // =============================================================================
 // CONFIGURAÇÕES
 // =============================================================================
-const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:3000";
+const API_BASE_URL = process.env.API_BASE_URL || "https://bot-avseg.onrender.com";
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
 const DELAY_ENVIO_MS = 3000;
 
 const IMAGEM_BOAS_VINDAS =
-  process.env.IMAGEM_URL || "https://seusite.com.br/imagem.jpg";
+  process.env.IMAGEM_URL || "https://symbolic-coffee-ul4gxedas3.edgeone.app/imagem.jpg";
 
 const TEST_MODE = process.env.TEST_MODE === "true";
 const ENABLE_CRON = process.env.ENABLE_CRON === "true";
