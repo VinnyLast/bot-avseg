@@ -12,7 +12,7 @@ const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
 const DELAY_ENVIO_MS = 3000;
 
 const IMAGEM_BOAS_VINDAS =
-  process.env.IMAGEM_URL || "https://symbolic-coffee-ul4gxedas3.edgeone.app/imagem.jpg";
+  process.env.IMAGEM_URL || "https://ibb.co/kgKQnZV2";
 
 const TEST_MODE = process.env.TEST_MODE === "true";
 const ENABLE_CRON = process.env.ENABLE_CRON === "true";
