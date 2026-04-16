@@ -1,6 +1,4 @@
-require("dotenv").config({
-  path: require("dotenv").config(),
-});
+require("dotenv").config();
 
 const axios = require("axios");
 const cron = require("node-cron");
