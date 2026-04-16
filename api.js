@@ -75,19 +75,24 @@ function normalizarPlaca(placa) {
 }
 
 function normalizarTelefoneBR(valor) {
-  const digitos = String(valor || "").replace(/\D/g, "");
+  let digitos = String(valor || "").replace(/\D/g, "");
   if (!digitos) return "";
 
-  if (digitos.startsWith("55")) {
-    if (digitos.length === 12 || digitos.length === 13) return digitos;
-    return "";
+  // Se o número veio sem o 55, adiciona
+  if (!digitos.startsWith("55")) {
+    digitos = `55${digitos}`;
   }
 
-  if (digitos.length === 10 || digitos.length === 11) {
-    return `55${digitos}`;
+  // LÓGICA DO NONO DÍGITO (Para DDDs >= 31 como o seu 75)
+  // Se tem 55 + DDD (2 dígitos) + 8 dígitos = 12 dígitos total
+  // Precisamos inserir o "9" após o DDD
+  if (digitos.length === 12) {
+    const parte1 = digitos.slice(0, 4); // 5575
+    const parte2 = digitos.slice(4);    // 81080660
+    digitos = `${parte1}9${parte2}`;    // 5575981080660
   }
 
-  return "";
+  return digitos;
 }
 
 function formatarDataBR(data) {
