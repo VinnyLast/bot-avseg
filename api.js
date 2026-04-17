@@ -7,7 +7,7 @@ const dayjs = require("dayjs");
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number(process.env.PORT || 10000);
 
 // ── Credenciais internas ──────────────────────────────────────────────────────
 const TOKEN_I9 = process.env.TOKEN_I9;
