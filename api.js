@@ -841,3 +841,4 @@ module.exports = {
   enviarImagem,
   normalizarTelefoneBR,
 };
+// =============================================================================
