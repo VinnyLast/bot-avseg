@@ -13,7 +13,7 @@ const {
 // CONFIGURAÇÕES
 // =============================================================================
 const API_BASE_URL =
-  process.env.API_BASE_URL || "https://bot-avseg.onrender.com";
+  process.env.API_BASE_URL || "http://localhost:10000";
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
 const DELAY_ENVIO_MS = 3000;
 
@@ -276,10 +276,15 @@ async function enviarMenu(numero, cliente) {
 // PROCESSAMENTO DE MENSAGENS
 // =============================================================================
 app.on("wa_message", async ({ from, bodyText }) => {
-  const texto = String(bodyText || "")
-    .toLowerCase()
-    .trim();
+  const texto = String(bodyText || "").toLowerCase().trim();
   const http = axiosInterno();
+
+  // NOVO: Se o usuário mandar algo que parece uma placa, já seta o estado de pagamento automaticamente
+  if (parecePlaca(bodyText)) {
+    estadoUsuario[from] = "pagamento";
+  }
+  
+  // ... resto do seu código (oi, menu, 1, 2, 3...)
 
   if (texto === "0" || texto === "parar") {
     usuariosOptOut.add(from);
