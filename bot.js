@@ -598,9 +598,9 @@ app.on("wa_message", async ({ from, bodyText }) => {
       from,
       `🚨 *Acione Assistência 24h*\n\n` +
         `Para receber o atendimento adequado, selecione o que aconteceu:\n\n` +
-        `*[1]* 🚨 Roubo ou Furto\n` +
-        `*[2]* 🛠️ Pane, Guincho ou Chaveiro\n` +
-        `*[3]* 💥 Colisão, Acidente ou Incêndio`
+        `1️⃣ 🚨 Roubo ou Furto\n` +
+        `2️⃣ 🛠️ Pane, Guincho ou Chaveiro\n` +
+        `3️⃣ 💥 Colisão, Acidente ou Incêndio`
     );
     return;
   }
