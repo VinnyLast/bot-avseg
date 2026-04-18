@@ -78,18 +78,15 @@ function normalizarTelefoneBR(valor) {
   let digitos = String(valor || "").replace(/\D/g, "");
   if (!digitos) return "";
 
-  // Se o número veio sem o 55, adiciona
   if (!digitos.startsWith("55")) {
     digitos = `55${digitos}`;
   }
 
-  // LÓGICA DO NONO DÍGITO (Para DDDs >= 31 como o seu 75)
-  // Se tem 55 + DDD (2 dígitos) + 8 dígitos = 12 dígitos total
-  // Precisamos inserir o "9" após o DDD
+  // Inserção do nono dígito para DDDs que ainda não têm
   if (digitos.length === 12) {
-    const parte1 = digitos.slice(0, 4); // 5575
-    const parte2 = digitos.slice(4);    // 81080660
-    digitos = `${parte1}9${parte2}`;    // 5575981080660
+    const parte1 = digitos.slice(0, 4);
+    const parte2 = digitos.slice(4);
+    digitos = `${parte1}9${parte2}`;
   }
 
   return digitos;
@@ -183,21 +180,15 @@ app.post("/webhook", (req, res) => {
 });
 
 // =============================================================================
-// ENVIO DE MENSAGEM
+// ENVIO DE MENSAGENS
 // =============================================================================
-const API_VERSION = process.env.WA_API_VERSION || "v25.0";
-
 async function enviarTexto(to, texto) {
   try {
-    console.log(`--- TENTANDO ENVIAR TEXTO ---`);
-    console.log(`Para: ${to}`);
-    console.log(`Versão API: v25.0`);
-
     const response = await axios.post(
       `https://graph.facebook.com/v25.0/${WA_PHONE_ID}/messages`,
       {
         messaging_product: "whatsapp",
-        to: to, // O número que o bot recebeu
+        to,
         type: "text",
         text: { body: texto },
       },
@@ -209,24 +200,19 @@ async function enviarTexto(to, texto) {
         timeout: 15000,
       }
     );
-
-    console.log(`✅ SUCESSO META:`, response.data);
+    console.log(`✅ TEXTO ENVIADO para ${to}:`, response.data);
   } catch (erro) {
-    console.error(`❌ ERRO DETALHADO DA META:`, erro.response?.data || erro.message);
+    console.error(`❌ ERRO META (texto):`, erro.response?.data || erro.message);
   }
 }
 
 async function enviarImagem(to, imageUrl, caption = "") {
   try {
-    console.log(`--- TENTANDO ENVIAR IMAGEM ---`);
-    console.log(`Para: ${to}`);
-    console.log(`URL da Imagem: ${imageUrl}`);
-
     const response = await axios.post(
       `https://graph.facebook.com/v25.0/${WA_PHONE_ID}/messages`,
       {
         messaging_product: "whatsapp",
-        to: to,
+        to,
         type: "image",
         image: { link: imageUrl, caption },
       },
@@ -238,10 +224,9 @@ async function enviarImagem(to, imageUrl, caption = "") {
         timeout: 15000,
       }
     );
-
-    console.log(`✅ IMAGEM ENVIADA:`, response.data);
+    console.log(`✅ IMAGEM ENVIADA para ${to}:`, response.data);
   } catch (erro) {
-    console.error(`❌ ERRO IMAGEM META:`, erro.response?.data || erro.message);
+    console.error(`❌ ERRO META (imagem):`, erro.response?.data || erro.message);
   }
 }
 
@@ -281,28 +266,19 @@ function montarMensagemSemResultado(entrada) {
 }
 
 // =============================================================================
-// I9
+// I9 — CONSULTA PADRÃO (segunda via)
 // =============================================================================
 function normalizarVeiculoI9(v) {
   return {
     matricula: v?.matricula || v?.Matricula || "ND",
     placa: v?.placa || v?.Placa || "ND",
     vencimento:
-      v?.vencimento ||
-      v?.Vencimento ||
-      v?.data_vencimento ||
-      v?.DataVencimento ||
-      "ND",
-    valor:
-      v?.valor || v?.Valor || v?.valor_boleto || v?.ValorBoleto || "ND",
+      v?.vencimento || v?.Vencimento || v?.data_vencimento || v?.DataVencimento || "ND",
+    valor: v?.valor || v?.Valor || v?.valor_boleto || v?.ValorBoleto || "ND",
     status: v?.status || v?.Status || "ND",
     url: v?.url || v?.Url || v?.link || v?.Link || "ND",
     linhadigitavel:
-      v?.linhadigitavel ||
-      v?.linha_digitavel ||
-      v?.LinhaDigitavel ||
-      v?.linhaDigitavel ||
-      "ND",
+      v?.linhadigitavel || v?.linha_digitavel || v?.LinhaDigitavel || v?.linhaDigitavel || "ND",
     nome: v?.nome || v?.Nome || "Cliente",
     documento: v?.documento || v?.Documento || "ND",
     telefone: normalizarTelefoneBR(v?.telefone || v?.Telefone || ""),
@@ -311,7 +287,6 @@ function normalizarVeiculoI9(v) {
 
 function temResultadoI9(dados) {
   if (!Array.isArray(dados?.veiculos) || dados.veiculos.length === 0) return false;
-
   return dados.veiculos.some(
     (v) =>
       (v.url && v.url !== "ND") ||
@@ -349,6 +324,131 @@ function adaptarResultadoI9(dadosI9) {
   };
 }
 
+async function consultarBoletoI9({ tipo, cpf, cnpj, placa }) {
+  const payload = {
+    token: TOKEN_I9,
+    tipo: tipo || 1,
+    cpf: normalizarDocumento(cpf),
+    cnpj: normalizarDocumento(cnpj),
+    placa: normalizarPlaca(placa),
+  };
+
+  const resposta = await axios.post(I9_BOLETO_URL, payload, {
+    headers: { "Content-Type": "application/json" },
+    timeout: 15000,
+  });
+
+  return resposta.data;
+}
+
+// =============================================================================
+// I9 — BUSCA DE VENCIMENTOS PARA NOTIFICAÇÕES AUTOMÁTICAS
+// =============================================================================
+
+/**
+ * Converte a data de vencimento do I9 (DD/MM/YYYY ou YYYY-MM-DD) para dayjs.
+ */
+function parsearDataVencimentoI9(vencimento) {
+  if (!vencimento || vencimento === "ND") return null;
+  const texto = String(vencimento).trim();
+
+  // Formato DD/MM/YYYY (padrão retornado pelo I9)
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(texto)) {
+    const [dia, mes, ano] = texto.split("/");
+    return dayjs(`${ano}-${mes}-${dia}`);
+  }
+
+  // Formato ISO YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    return dayjs(texto);
+  }
+
+  return null;
+}
+
+/**
+ * Dado um array de placas, consulta o I9 e retorna apenas os veículos
+ * cujo vencimento bate com a dataAlvo.
+ */
+async function i9BuscarVencimentosPorPlacas(placas, dataAlvo, tipoNotificacao) {
+  const dataAlvoDayjs = dayjs(dataAlvo);
+  const resultados = [];
+  const LOTE = 5;
+
+  for (let i = 0; i < placas.length; i += LOTE) {
+    const lote = placas.slice(i, i + LOTE);
+
+    await Promise.all(
+      lote.map(async (placa) => {
+        try {
+          const dados = await consultarBoletoI9({ tipo: 1, placa });
+          const veiculos = Array.isArray(dados?.veiculos) ? dados.veiculos : [];
+
+          for (const v of veiculos) {
+            const norm = normalizarVeiculoI9(v);
+            const dataVenc = parsearDataVencimentoI9(norm.vencimento);
+
+            if (!dataVenc) continue;
+            if (!dataVenc.isSame(dataAlvoDayjs, "day")) continue;
+            if (norm.url === "ND" && norm.linhadigitavel === "ND") continue;
+
+            resultados.push({
+              nome: norm.nome,
+              telefone: norm.telefone,
+              placa: norm.placa || placa,
+              vencimento: norm.vencimento,
+              valor: norm.valor,
+              url: norm.url,
+              linhadigitavel: norm.linhadigitavel,
+              matricula: norm.matricula,
+              tipo: tipoNotificacao,
+              sistema: "i9",
+            });
+          }
+        } catch (erro) {
+          console.warn(`⚠️ I9 vencimentos — erro na placa ${placa}:`, extrairErro(erro));
+        }
+      })
+    );
+  }
+
+  return resultados;
+}
+
+/**
+ * Busca vencimentos no I9 para uma data-alvo.
+ * Estratégia: obtém as placas pelo South (que já tem listagem por data)
+ * e cruza com o I9 individualmente.
+ */
+async function i9BuscarVencimentos(dataAlvo, tipoNotificacao) {
+  try {
+    const boletosDoSouth = await southBuscarVencimentos(dataAlvo, tipoNotificacao);
+    const placas = [
+      ...new Set(
+        boletosDoSouth
+          .map((b) => normalizarPlaca(b.placa))
+          .filter(Boolean)
+      ),
+    ];
+
+    if (!placas.length) {
+      console.log(`ℹ️ I9 [${tipoNotificacao}]: sem placas no South para ${dataAlvo}`);
+      return [];
+    }
+
+    console.log(`🔍 I9 [${tipoNotificacao}]: consultando ${placas.length} placa(s) — ${dataAlvo}`);
+    const resultados = await i9BuscarVencimentosPorPlacas(placas, dataAlvo, tipoNotificacao);
+    console.log(`✅ I9 [${tipoNotificacao}]: ${resultados.length} resultado(s)`);
+    return resultados;
+  } catch (erro) {
+    console.error(`❌ Erro i9BuscarVencimentos [${tipoNotificacao}]:`, extrairErro(erro));
+    return [];
+  }
+}
+
+// =============================================================================
+// SOUTH
+// =============================================================================
 function temResultadoSouth(dados) {
   return Boolean(dados?.veiculos?.length);
 }
@@ -361,10 +461,7 @@ async function southBuscarAssociado(placaOuDocumento) {
     const resposta = await axios.get(
       `${SOUTH_BASE_URL}VendasCarros/DadosAssociado/${encodeURIComponent(valor)}`,
       {
-        headers: {
-          Accept: "application/json",
-          Authorization: SOUTH_TOKEN,
-        },
+        headers: { Accept: "application/json", Authorization: SOUTH_TOKEN },
         timeout: 15000,
       }
     );
@@ -384,10 +481,7 @@ async function southBuscarAniversariantes() {
   try {
     const resposta = await axios.get(`${SOUTH_BASE_URL}Clientes/aniversariantes`, {
       params: { Mes: mes, Dia: dia },
-      headers: {
-        Authorization: SOUTH_TOKEN,
-        Accept: "application/json",
-      },
+      headers: { Authorization: SOUTH_TOKEN, Accept: "application/json" },
       timeout: 15000,
     });
 
@@ -411,6 +505,7 @@ async function southBuscarAniversariantes() {
       ),
       tipo: "aniversario",
       dataNascimento: cli.IndividuosDataNascimento || "",
+      sistema: "south",
     }));
   } catch (erro) {
     console.error("❌ Erro Aniversariantes:", erro.response?.status, erro.response?.data || erro.message);
@@ -426,34 +521,10 @@ async function southBuscarVencimentos(dataAlvo, tipoNotificacao) {
 
   const payloads = [];
   for (const dataFormatada of formatosData) {
-    payloads.push({
-      DataInicial: dataFormatada,
-      DataFinal: dataFormatada,
-      Situacao: 1,
-      FormaPagamento: 1,
-      count: 100,
-      page: 1,
-    });
-    payloads.push({
-      DataInicial: dataFormatada,
-      DataFinal: dataFormatada,
-      Situacao: 4,
-      count: 100,
-      page: 1,
-    });
-    payloads.push({
-      DataInicial: dataFormatada,
-      DataFinal: dataFormatada,
-      FormaPagamento: 1,
-      count: 100,
-      page: 1,
-    });
-    payloads.push({
-      DataInicial: dataFormatada,
-      DataFinal: dataFormatada,
-      count: 100,
-      page: 1,
-    });
+    payloads.push({ DataInicial: dataFormatada, DataFinal: dataFormatada, Situacao: 1, FormaPagamento: 1, count: 100, page: 1 });
+    payloads.push({ DataInicial: dataFormatada, DataFinal: dataFormatada, Situacao: 4, count: 100, page: 1 });
+    payloads.push({ DataInicial: dataFormatada, DataFinal: dataFormatada, FormaPagamento: 1, count: 100, page: 1 });
+    payloads.push({ DataInicial: dataFormatada, DataFinal: dataFormatada, count: 100, page: 1 });
   }
 
   for (const payloadBase of payloads) {
@@ -485,9 +556,7 @@ async function southBuscarVencimentos(dataAlvo, tipoNotificacao) {
           : [];
 
         if (!lista.length) break;
-
         todos.push(...lista);
-
         if (lista.length < 100) break;
         pagina++;
       } catch (erro) {
@@ -531,11 +600,9 @@ async function southBuscarVencimentos(dataAlvo, tipoNotificacao) {
         valor: boleto.FaturasValor || boleto.Valor || "ND",
         url: boleto.UrlBoleto || "ND",
         linhadigitavel:
-          boleto.FaturasLinhaDigitavel ||
-          boleto.Faturasemv ||
-          boleto.linhadigitavel ||
-          "ND",
+          boleto.FaturasLinhaDigitavel || boleto.Faturasemv || boleto.linhadigitavel || "ND",
         tipo: tipoNotificacao,
+        sistema: "south",
       }));
     }
   }
@@ -626,34 +693,12 @@ async function southSegundaViaBoletos({ placa, documento }) {
   }
 }
 
-async function consultarBoletoI9({ tipo, cpf, cnpj, placa }) {
-  const payload = {
-    token: TOKEN_I9,
-    tipo: tipo || 1,
-    cpf: normalizarDocumento(cpf),
-    cnpj: normalizarDocumento(cnpj),
-    placa: normalizarPlaca(placa),
-  };
-
-  const resposta = await axios.post(I9_BOLETO_URL, payload, {
-    headers: { "Content-Type": "application/json" },
-    timeout: 15000,
-  });
-
-  return resposta.data;
-}
-
 // =============================================================================
 // ROTA /clienteTelefone
 // =============================================================================
 app.post("/clienteTelefone", protegerRotaInterna, async (req, res) => {
   const telefone = normalizarTelefoneBR(req.body?.telefone || "");
-  return res.json({
-    erro: false,
-    nome: "Associado",
-    telefone,
-    veiculos: [],
-  });
+  return res.json({ erro: false, nome: "Associado", telefone, veiculos: [] });
 });
 
 // =============================================================================
@@ -680,72 +725,44 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
     const cnpjFinal = normalizarDocumento(cnpj || "");
 
     if (sistema === "i9") {
-      const dadosI9 = await consultarBoletoI9({
-        tipo,
-        cpf: cpfFinal,
-        cnpj: cnpjFinal,
-        placa: placaFinal,
-      });
-
+      const dadosI9 = await consultarBoletoI9({ tipo, cpf: cpfFinal, cnpj: cnpjFinal, placa: placaFinal });
       const resultadoI9 = adaptarResultadoI9(dadosI9);
 
-      if (temResultadoI9(resultadoI9)) {
-        return res.json({ sistema: "i9", ...resultadoI9 });
-      }
+      if (temResultadoI9(resultadoI9)) return res.json({ sistema: "i9", ...resultadoI9 });
 
       return res.status(404).json({
         sistema: "i9",
         status: "erro",
         mensagem: resultadoI9.mensagem || "Nenhum boleto encontrado no I9",
         veiculos: [],
-        mensagemWhatsapp:
-          resultadoI9.mensagemWhatsapp || montarMensagemSemResultado(entradaExibicao),
+        mensagemWhatsapp: resultadoI9.mensagemWhatsapp || montarMensagemSemResultado(entradaExibicao),
       });
     }
 
     if (sistema === "south") {
-      const dadosSouth = await southSegundaViaBoletos({
-        placa: placaFinal,
-        documento: docFinal,
-      });
+      const dadosSouth = await southSegundaViaBoletos({ placa: placaFinal, documento: docFinal });
 
-      if (temResultadoSouth(dadosSouth)) {
-        return res.json({ sistema: "south", ...dadosSouth });
-      }
+      if (temResultadoSouth(dadosSouth)) return res.json({ sistema: "south", ...dadosSouth });
 
       return res.status(404).json({
         sistema: "south",
         ...dadosSouth,
-        mensagemWhatsapp:
-          dadosSouth.mensagemWhatsapp || montarMensagemSemResultado(entradaExibicao),
+        mensagemWhatsapp: dadosSouth.mensagemWhatsapp || montarMensagemSemResultado(entradaExibicao),
       });
     }
 
+    // Tenta I9 primeiro, depois fallback para South
     try {
-      const dadosI9 = await consultarBoletoI9({
-        tipo,
-        cpf: cpfFinal,
-        cnpj: cnpjFinal,
-        placa: placaFinal,
-      });
-
+      const dadosI9 = await consultarBoletoI9({ tipo, cpf: cpfFinal, cnpj: cnpjFinal, placa: placaFinal });
       const resultadoI9 = adaptarResultadoI9(dadosI9);
-
-      if (temResultadoI9(resultadoI9)) {
-        return res.json({ sistema: "i9", ...resultadoI9 });
-      }
+      if (temResultadoI9(resultadoI9)) return res.json({ sistema: "i9", ...resultadoI9 });
     } catch (erroI9) {
       console.warn("I9 falhou:", extrairErro(erroI9));
     }
 
-    const dadosSouth = await southSegundaViaBoletos({
-      placa: placaFinal,
-      documento: docFinal,
-    });
+    const dadosSouth = await southSegundaViaBoletos({ placa: placaFinal, documento: docFinal });
 
-    if (temResultadoSouth(dadosSouth)) {
-      return res.json({ sistema: "south", ...dadosSouth });
-    }
+    if (temResultadoSouth(dadosSouth)) return res.json({ sistema: "south", ...dadosSouth });
 
     return res.status(404).json({
       status: "erro",
@@ -765,32 +782,47 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
 });
 
 // =============================================================================
-// ROTA /notificacoes-pendentes
+// ROTA /notificacoes-pendentes  (South + I9)
 // =============================================================================
 app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
   const hoje = dayjs();
   const d5 = hoje.add(5, "day").format("YYYY-MM-DD");
   const d2 = hoje.add(2, "day").format("YYYY-MM-DD");
   const d0 = hoje.format("YYYY-MM-DD");
-  const atrasado = hoje.subtract(5, "day").format("YYYY-MM-DD");
+  const atrasado = hoje.subtract(2, "day").format("YYYY-MM-DD"); // 2 dias de atraso
 
   try {
-    const [niver, list5, list2, listHoje, listAtraso] = await Promise.all([
+    const [
+      niver,
+      southList5, southList2, southListHoje, southListAtraso,
+      i9List5,    i9List2,    i9ListHoje,    i9ListAtraso,
+    ] = await Promise.all([
       southBuscarAniversariantes(),
+      // South
       southBuscarVencimentos(d5, "lembrete_5"),
       southBuscarVencimentos(d2, "lembrete_2"),
       southBuscarVencimentos(d0, "vencimento_hoje"),
       southBuscarVencimentos(atrasado, "cobranca_atraso"),
+      // I9 (cruza placas do South)
+      i9BuscarVencimentos(d5, "lembrete_5"),
+      i9BuscarVencimentos(d2, "lembrete_2"),
+      i9BuscarVencimentos(d0, "vencimento_hoje"),
+      i9BuscarVencimentos(atrasado, "cobranca_atraso"),
     ]);
 
-    const todas = [...niver, ...list5, ...list2, ...listHoje, ...listAtraso];
-    const validas = todas.filter((item) => item.telefone);
+    const todas = [
+      ...niver,
+      ...southList5, ...southList2, ...southListHoje, ...southListAtraso,
+      ...i9List5,    ...i9List2,    ...i9ListHoje,    ...i9ListAtraso,
+    ];
 
+    const validas = todas.filter((item) => item.telefone);
     const unicas = [];
     const chaves = new Set();
 
     for (const item of validas) {
-      const chave = `${item.tipo}-${item.telefone}-${item.placa || ""}`;
+      // Chave inclui o sistema para não suprimir entradas legítimas de ambos
+      const chave = `${item.tipo}-${item.sistema || "geral"}-${item.telefone}-${item.placa || ""}`;
       if (!chaves.has(chave)) {
         chaves.add(chave);
         unicas.push(item);
@@ -801,18 +833,24 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
       total: unicas.length,
       resumo: {
         aniversarios: niver.length,
-        lembrete_5: list5.length,
-        lembrete_2: list2.length,
-        vencimento_hoje: listHoje.length,
-        cobranca_atraso: listAtraso.length,
+        south: {
+          lembrete_5: southList5.length,
+          lembrete_2: southList2.length,
+          vencimento_hoje: southListHoje.length,
+          cobranca_atraso: southListAtraso.length,
+        },
+        i9: {
+          lembrete_5: i9List5.length,
+          lembrete_2: i9List2.length,
+          vencimento_hoje: i9ListHoje.length,
+          cobranca_atraso: i9ListAtraso.length,
+        },
       },
       notificacoes: unicas,
     });
   } catch (erro) {
     console.error("Erro em /notificacoes-pendentes:", erro.message);
-    return res.status(500).json({
-      erro: "Erro ao consolidar notificações diárias",
-    });
+    return res.status(500).json({ erro: "Erro ao consolidar notificações diárias" });
   }
 });
 
@@ -828,7 +866,14 @@ app.get("/teste-vencimentos", protegerRotaInterna, async (req, res) => {
   const data = req.query.data || dayjs().format("YYYY-MM-DD");
   const tipo = req.query.tipo || "manual";
   const dados = await southBuscarVencimentos(data, tipo);
-  res.json({ total: dados.length, data, dados });
+  res.json({ total: dados.length, data, sistema: "south", dados });
+});
+
+app.get("/teste-vencimentos-i9", protegerRotaInterna, async (req, res) => {
+  const data = req.query.data || dayjs().format("YYYY-MM-DD");
+  const tipo = req.query.tipo || "manual";
+  const dados = await i9BuscarVencimentos(data, tipo);
+  res.json({ total: dados.length, data, sistema: "i9", dados });
 });
 
 app.listen(PORT, () => {
@@ -841,4 +886,3 @@ module.exports = {
   enviarImagem,
   normalizarTelefoneBR,
 };
-// =============================================================================
