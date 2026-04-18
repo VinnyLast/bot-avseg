@@ -239,20 +239,11 @@ function montarMensagemBoleto(veiculo) {
   const vencimento = formatarDataBR(veiculo.vencimento);
   const valor = formatarValorBR(veiculo.valor);
   const url = veiculo.url || "ND";
-  const linhaDigitavel =
-    veiculo.linhadigitavel && veiculo.linhadigitavel !== "ND"
-      ? String(veiculo.linhadigitavel).replace(/\s+/g, "")
-      : "";
-
   let msg = `💳 *Boleto encontrado com sucesso!*\n\n`;
   msg += `👤 *Associado:* ${nome}\n`;
   msg += `🚗 *Placa:* ${placa}\n`;
   msg += `📅 *Vencimento:* ${vencimento}\n`;
   msg += `💰 *Valor:* ${valor}\n`;
-
-  if (linhaDigitavel) {
-    msg += `📄 *Linha digitável:*\n${linhaDigitavel}\n`;
-  }
 
   if (url && url !== "ND") {
     msg += `\n🔗 *Acessar boleto:*\n${url}`;

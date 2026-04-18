@@ -195,7 +195,7 @@ function montarOpcoeMenu() {
 }
 
 async function enviarMenu(numero, cliente) {
-  let saudacao = `🛡️ *AVSEG Proteção Veicular*\n\n`;
+  let saudacao = `🦁 *AVSEG Proteção Veicular*\n\n`;
 
   if (
     cliente &&
@@ -478,6 +478,56 @@ app.on("wa_message", async ({ from, bodyText }) => {
     return;
   }
 
+  // ── 1b. Se está no submenu de assistência 24h
+  if (estadoUsuario[from] === "assistencia") {
+    if (texto === "1") {
+      estadoUsuario[from] = null;
+      await enviarTextoSeguro(
+        from,
+        `🚨 *Assistência 24h — Roubo ou Furto*\n\n` +
+          `Em caso de roubo ou furto do seu veículo, mantenha a calma e siga as orientações:\n\n` +
+          `1️⃣ Ligue imediatamente para o *190* e registre a ocorrência.\n` +
+          `2️⃣ Em seguida, entre em contato com a nossa Assistência 24 horas para darmos continuidade ao atendimento:\n\n` +
+          `📞 *${TELEFONE_ASSISTENCIA}*\n\n` +
+          `Estamos prontos para te ajudar.`
+      );
+    } else if (texto === "2") {
+      estadoUsuario[from] = null;
+      await enviarTextoSeguro(
+        from,
+        `🛠️ *Assistência 24h — Pane Mecânica, Guincho ou Chaveiro*\n\n` +
+          `Se precisar de ajuda, siga as orientações abaixo:\n\n` +
+          `🔧 Em caso de pane mecânica, solicite atendimento para avaliação no local.\n` +
+          `🚗 Se necessário, acionaremos o guincho para remoção do veículo.\n` +
+          `🔑 Em situações de chaveiro (perda, quebra ou chave trancada no veículo), enviaremos um profissional para te auxiliar.\n\n` +
+          `Para agilizar o atendimento, tenha sua localização em mãos e ligue imediatamente para nossa Central:\n\n` +
+          `📞 *${TELEFONE_ASSISTENCIA}*\n\n` +
+          `Estamos à disposição para cuidar de você! 💛`
+      );
+    } else if (texto === "3") {
+      estadoUsuario[from] = null;
+      await enviarTextoSeguro(
+        from,
+        `💥 *Assistência 24h — Colisão, Acidente, Danos a Terceiros ou Incêndio*\n\n` +
+          `Em caso de sinistro, siga as orientações:\n\n` +
+          `1️⃣ Verifique se há vítimas e, se necessário, acione o *192* (SAMU) ou *193* (Bombeiros) imediatamente.\n` +
+          `2️⃣ Em caso de colisão ou danos a terceiros, ligue para o *190* para registro da ocorrência.\n` +
+          `3️⃣ Em seguida, entre em contato com a nossa Assistência 24 horas para darmos continuidade ao atendimento:\n\n` +
+          `📞 *${TELEFONE_ASSISTENCIA}*\n\n` +
+          `Estamos aqui para te orientar e prestar todo o suporte necessário.`
+      );
+    } else {
+      await enviarTextoSeguro(
+        from,
+        `❌ Opção inválida. Por favor, responda com *1*, *2* ou *3*:\n\n` +
+          `*[1]* 🚨 Roubo ou Furto\n` +
+          `*[2]* 🛠️ Pane, Guincho ou Chaveiro\n` +
+          `*[3]* 💥 Colisão, Acidente ou Incêndio`
+      );
+    }
+    return;
+  }
+
   // ── 2. Opt-out / opt-in de notificações
   if (texto === "0" || texto === "parar") {
     usuariosOptOut.add(from);
@@ -541,11 +591,16 @@ app.on("wa_message", async ({ from, bodyText }) => {
     return;
   }
 
-  // 3 — Acione assistência 24h
+  // 3 — Acione assistência 24h (submenu)
   if (texto === "3") {
+    estadoUsuario[from] = "assistencia";
     await enviarTextoSeguro(
       from,
-      `🚨 *Assistência 24 horas*\n\nPara acionar a assistência, entre em contato com nossa central:\n\n📞 *${TELEFONE_ASSISTENCIA}*\n\nNossa equipe irá te orientar imediatamente, a qualquer hora do dia ou da noite. Estamos com você! 🤝\n\n📍 ${LOCALIZACAO}`
+      `🚨 *Acione Assistência 24h*\n\n` +
+        `Para receber o atendimento adequado, selecione o que aconteceu:\n\n` +
+        `*[1]* 🚨 Roubo ou Furto\n` +
+        `*[2]* 🛠️ Pane, Guincho ou Chaveiro\n` +
+        `*[3]* 💥 Colisão, Acidente ou Incêndio`
     );
     return;
   }
@@ -590,7 +645,7 @@ app.on("wa_message", async ({ from, bodyText }) => {
     modoHumano.delete(from);
     await enviarTextoSeguro(
       from,
-      `✅ *Conversa encerrada.*\n\nFoi um prazer te atender! 😊\n\nQuando precisar, é só enviar *oi* ou *menu*. Estaremos aqui!\n\n🛡️ *AVSEG Proteção Veicular*`
+      `✅ *Conversa encerrada.*\n\nFoi um prazer te atender! 😊\n\nQuando precisar, é só enviar *oi* ou *menu*. Estaremos aqui!\n\n🦁 *AVSEG Proteção Veicular*`
     );
     return;
   }
