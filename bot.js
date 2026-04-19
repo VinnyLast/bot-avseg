@@ -227,13 +227,13 @@ async function enviarMenu(numero, cliente) {
 // MENSAGENS DE BOLETO
 // =============================================================================
 function montarResumoVeiculo(v, indice) {
-  let msg = `💳 *Boleto ${indice + 1} encontrado:*\n\n`;
+  let msg = `💳 *Participação mensal ${indice + 1} encontrada:*\n\n`;
   msg += `👤 Associado: ${v.nome || "ND"}\n`;
   msg += `📋 Matrícula: ${v.matricula || "ND"}\n`;
   msg += `🚗 Placa: ${v.placa || "ND"}\n`;
   msg += `📅 Vencimento: ${formatarDataBR(v.vencimento)}\n`;
   msg += `💰 Valor: ${formatarValor(v.valor)}\n`;
-  if (v.url && v.url !== "ND") msg += `🔗 Boleto: ${v.url}\n`;
+  if (v.url && v.url !== "ND") msg += `🔗 Participação mensal: ${v.url}\n`;
   return msg;
 }
 
@@ -261,7 +261,7 @@ function montarMensagemNotificacao(item) {
     case "lembrete_5":
       return (
         `Olá ${nome}! 🚗\n\n` +
-        `Passando para lembrar que o boleto da sua proteção${temPlaca ? ` da placa *${placa}*` : ""} vence em *5 dias*.\n` +
+        `Passando para lembrar que a participação mensal da sua proteção${temPlaca ? ` da placa *${placa}*` : ""} vence em *5 dias*.\n` +
         (temValor ? `💰 Valor: *${valor}*\n` : "") +
         (temVenc ? `📅 Vencimento: *${vencimento}*\n` : "") +
         `\nSe precisar da 2ª via, basta responder com *menu*.\n` +
@@ -271,17 +271,17 @@ function montarMensagemNotificacao(item) {
     case "lembrete_2":
       return (
         `Atenção ${nome}! 🚨\n\n` +
-        `Seu boleto${temPlaca ? ` da placa *${placa}*` : ""} vence em *2 dias*.\n` +
+        `Sua participação mensal${temPlaca ? ` da placa *${placa}*` : ""} vence em *2 dias*.\n` +
         (temValor ? `💰 Valor: *${valor}*\n` : "") +
         (temVenc ? `📅 Vencimento: *${vencimento}*\n` : "") +
-        `\nJá está com ele em mãos? Responda *menu* para obter a 2ª via.\n` +
+        `\nJá está com ela em mãos? Responda *menu* para obter a 2ª via.\n` +
         `\n_(Para parar de receber lembretes, responda com *0*)_`
       );
 
     case "vencimento_hoje":
       return (
         `🚨 *Vence hoje!*\n\n` +
-        `${nome}, o seu boleto${temPlaca ? ` da placa *${placa}*` : ""} vence *hoje*.\n` +
+        `${nome}, a sua participação mensal${temPlaca ? ` da placa *${placa}*` : ""} vence *hoje*.\n` +
         (temValor ? `💰 Valor: *${valor}*\n` : "") +
         (temVenc ? `📅 Vencimento: *${vencimento}*\n` : "") +
         `\nEvite ficar sem cobertura. Se precisar da 2ª via, responda com *menu*.`
@@ -290,7 +290,7 @@ function montarMensagemNotificacao(item) {
     case "cobranca_atraso":
       return (
         `⚠️ *Aviso de pendência*\n\n` +
-        `${nome}, identificamos que o boleto${temPlaca ? ` da placa *${placa}*` : ""} venceu há *2 dias*.\n` +
+        `${nome}, identificamos que a participação mensal${temPlaca ? ` da placa *${placa}*` : ""} venceu há *2 dias*.\n` +
         (temValor ? `💰 Valor: *${valor}*\n` : "") +
         (temVenc ? `📅 Vencimento original: *${vencimento}*\n` : "") +
         `\nRegularize para manter sua proteção ativa. Responda *menu* e acesse *Pagamentos*.`
@@ -381,7 +381,7 @@ async function processarPagamento(from, bodyText) {
     } catch (erroApi) {
       dados = erroApi.response?.data;
       if (!dados) {
-        await enviarTextoSeguro(from, "❌ Não consegui consultar seu boleto agora. Tente novamente em instantes.");
+        await enviarTextoSeguro(from, "❌ Não consegui consultar sua participação mensal agora. Tente novamente em instantes.");
         estadoUsuario[from] = null;
         return;
       }
@@ -422,7 +422,7 @@ async function processarPagamento(from, bodyText) {
     const comBoleto = dados.veiculos.filter(existeBoletoDisponivel);
 
     if (comBoleto.length === 0) {
-      await enviarTextoSeguro(from, `⚠️ ${dados?.mensagem || "Cadastro encontrado, mas não há boleto em aberto no momento."}`);
+      await enviarTextoSeguro(from, `⚠️ ${dados?.mensagem || "Cadastro encontrado, mas não há participação mensal em aberto no momento."}`);
       estadoUsuario[from] = null;
       return;
     }
@@ -443,7 +443,7 @@ async function processarPagamento(from, bodyText) {
     estadoUsuario[from] = null;
   } catch (erro) {
     console.error("Erro no fluxo de pagamento:", erro.message);
-    await enviarTextoSeguro(from, "❌ Não consegui consultar seu boleto agora. Tente novamente em instantes.");
+    await enviarTextoSeguro(from, "❌ Não consegui consultar sua participação mensal agora. Tente novamente em instantes.");
     estadoUsuario[from] = null;
   }
 }
@@ -586,7 +586,7 @@ app.on("wa_message", async ({ from, bodyText }) => {
     estadoUsuario[from] = "pagamento";
     await enviarTextoSeguro(
       from,
-      `💳 *Pagamentos — 2ª via de boleto*\n\nEnvie um dos dados abaixo:\n\n• 📋 CPF do titular\n• 🏢 CNPJ\n• 🚗 Placa do veículo`
+      `💳 *Pagamentos — 2ª via da participação mensal*\n\nEnvie um dos dados abaixo:\n\n• 📋 CPF do titular\n• 🏢 CNPJ\n• 🚗 Placa do veículo`
     );
     return;
   }
@@ -708,7 +708,7 @@ if (ENABLE_CRON) {
         // Se tem boleto disponível, envia o link junto na notificação
         if (item.url && item.url !== "ND" && item.tipo !== "aniversario") {
           await delay(500);
-          await enviarTextoSeguro(telefone, `🔗 *Acesse seu boleto:*\n${item.url}`);
+          await enviarTextoSeguro(telefone, `🔗 *Acesse sua participação mensal:*\n${item.url}`);
         }
 
         await delay(DELAY_ENVIO_MS);
