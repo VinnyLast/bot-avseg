@@ -295,25 +295,26 @@ async function enviarTextoCanal(from, texto, contexto = {}) {
 
 async function enviarImagemCanal(from, imageUrl, caption = "", contexto = {}) {
   const numero = normalizarTelefoneBR(from);
-  if (!numero) return;
-  if (!podeEnviar(numero)) {
-    console.log(`🧪 TEST_MODE ativo: imagem bloqueada para ${numero}`);
-    return;
-  }
 
-  const origem = contexto.origem || obterUltimoCanal(numero)?.origem || "meta";
+  if (!numero) return;
+
+  if (!podeEnviar(numero)) return;
 
   try {
-    if (origem === "chatwoot") {
-      let mensagem = caption ? `${caption}\n\n` : "";
-      mensagem += `🖼️ Imagem: ${imageUrl}`;
-      await enviarTextoCanal(numero, mensagem, contexto);
-      return;
-    }
+    // Envia imagem normal em qualquer canal
     await enviarImagem(numero, imageUrl, caption);
+
     console.log(`✅ Imagem enviada para ${numero}`);
   } catch (erro) {
-    console.error(`❌ Erro ao enviar imagem para ${numero}:`, erro.response?.data || erro.message);
+    console.error(
+      "Erro enviando imagem:",
+      erro.response?.data || erro.message
+    );
+
+    // fallback só se der erro de verdade
+    if (caption) {
+      await enviarTextoCanal(numero, caption, contexto);
+    }
   }
 }
 
