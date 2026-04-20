@@ -178,7 +178,37 @@ app.post("/webhook", (req, res) => {
 
   app.emit("wa_message", { from, bodyText, msgType, message, value });
 });
+app.post("/chatwoot-bot", async (req, res) => {
+  try {
+    console.log("CHATWOOT BOT RECEBIDO");
+    console.log(JSON.stringify(req.body, null, 2));
 
+    const mensagem = req.body?.content || "";
+    const contato =
+      req.body?.conversation?.meta?.sender?.phone_number ||
+      req.body?.contact?.phone_number ||
+      "";
+
+    const from = normalizarTelefoneBR(contato);
+
+    if (!from || !mensagem) {
+      return res.status(200).json({ message: "ok" });
+    }
+
+    app.emit("chatwoot_message", {
+      from,
+      bodyText: mensagem,
+      raw: req.body,
+    });
+
+    return res.status(200).json({
+      responses: [],
+    });
+  } catch (erro) {
+    console.error("Erro /chatwoot-bot:", erro.message);
+    return res.status(200).json({ responses: [] });
+  }
+});
 // =============================================================================
 // ENVIO DE MENSAGENS
 // =============================================================================

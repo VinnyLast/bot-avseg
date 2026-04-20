@@ -14,7 +14,7 @@ const {
 // =============================================================================
 const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:10000";
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
-const DELAY_ENVIO_MS = 3000;
+const DELAY_ENVIO_MS = Number(process.env.DELAY_ENVIO_MS || 3000);
 
 const IMAGEM_BOAS_VINDAS =
   process.env.IMAGEM_URL ||
@@ -22,6 +22,7 @@ const IMAGEM_BOAS_VINDAS =
 
 const TEST_MODE = process.env.TEST_MODE === "true";
 const ENABLE_CRON = process.env.ENABLE_CRON === "true";
+
 const ALLOWED_NUMBERS = new Set(
   String(process.env.ALLOWED_NUMBERS || "")
     .split(",")
@@ -29,7 +30,13 @@ const ALLOWED_NUMBERS = new Set(
     .filter(Boolean)
 );
 
-// Links que serão adicionados na segunda-feira — deixe vazio para ocultar o botão
+// Chatwoot
+const CHATWOOT_ENABLED = process.env.CHATWOOT_ENABLED === "true";
+const CHATWOOT_BASE_URL = String(process.env.CHATWOOT_BASE_URL || "").replace(/\/+$/, "");
+const CHATWOOT_API_TOKEN = process.env.CHATWOOT_API_TOKEN || "";
+const CHATWOOT_ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID || "";
+
+// Links
 const LINK_COTACAO = process.env.LINK_COTACAO || "";
 const LINK_VISTORIA = process.env.LINK_VISTORIA || "";
 
@@ -41,10 +48,22 @@ const TELEFONE_ASSISTENCIA = "0800 130-0078";
 // =============================================================================
 // ESTADO EM MEMÓRIA
 // =============================================================================
-const estadoUsuario = {};   // null | "pagamento" | "avaliacao"
-const modoHumano = new Set(); // Números que estão com atendente humano
+const estadoUsuario = {}; // null | "pagamento" | "avaliacao" | "assistencia"
+const modoHumano = new Set(); // Telefones em handoff humano
 const usuariosOptOut = new Set(); // Não recebem lembretes preventivos
-const avaliacoes = [];      // Histórico de avaliações (em memória)
+const avaliacoes = []; // Histórico em memória
+
+/**
+ * Mapa do último canal por telefone.
+ * Estrutura:
+ * ultimoCanalPorNumero[telefone] = {
+ *   origem: "meta" | "chatwoot",
+ *   conversationId?: number|string,
+ *   inboxId?: number|string,
+ *   contactId?: number|string
+ * }
+ */
+const ultimoCanalPorNumero = Object.create(null);
 
 // =============================================================================
 // UTILITÁRIOS
@@ -122,42 +141,6 @@ function podeEnviar(numero) {
   return ALLOWED_NUMBERS.has(normalizado);
 }
 
-async function enviarTextoSeguro(to, texto) {
-  const numero = normalizarTelefoneBR(to);
-  if (!numero) {
-    console.warn("⚠️ Número inválido para envio de texto");
-    return;
-  }
-  if (!podeEnviar(numero)) {
-    console.log(`🧪 TEST_MODE ativo: envio bloqueado para ${numero}`);
-    return;
-  }
-  try {
-    await enviarTexto(numero, texto);
-    console.log(`✅ Texto enviado para ${numero}`);
-  } catch (erro) {
-    console.error(`❌ Erro ao enviar texto para ${numero}:`, erro.response?.data || erro.message);
-  }
-}
-
-async function enviarImagemSegura(to, imageUrl, caption = "") {
-  const numero = normalizarTelefoneBR(to);
-  if (!numero) {
-    console.warn("⚠️ Número inválido para envio de imagem");
-    return;
-  }
-  if (!podeEnviar(numero)) {
-    console.log(`🧪 TEST_MODE ativo: imagem bloqueada para ${numero}`);
-    return;
-  }
-  try {
-    await enviarImagem(numero, imageUrl, caption);
-    console.log(`✅ Imagem enviada para ${numero}`);
-  } catch (erro) {
-    console.error(`❌ Erro ao enviar imagem para ${numero}:`, erro.response?.data || erro.message);
-  }
-}
-
 function axiosInterno() {
   return axios.create({
     baseURL: API_BASE_URL,
@@ -169,32 +152,213 @@ function axiosInterno() {
   });
 }
 
+function atualizarUltimoCanal(from, dados = {}) {
+  const numero = normalizarTelefoneBR(from);
+  if (!numero) return;
+
+  ultimoCanalPorNumero[numero] = {
+    ...ultimoCanalPorNumero[numero],
+    ...dados,
+  };
+}
+
+function obterUltimoCanal(from) {
+  const numero = normalizarTelefoneBR(from);
+  if (!numero) return null;
+  return ultimoCanalPorNumero[numero] || null;
+}
+
+function temChatwootConfigurado() {
+  return Boolean(
+    CHATWOOT_ENABLED &&
+      CHATWOOT_BASE_URL &&
+      CHATWOOT_API_TOKEN &&
+      CHATWOOT_ACCOUNT_ID
+  );
+}
+
+function montarHeadersChatwoot() {
+  return {
+    api_access_token: CHATWOOT_API_TOKEN,
+    "Content-Type": "application/json",
+  };
+}
+
+// =============================================================================
+// CHATWOOT — API
+// =============================================================================
+async function enviarTextoChatwoot(conversationId, texto, isPrivate = false) {
+  if (!temChatwootConfigurado()) {
+    console.warn("⚠️ Chatwoot não configurado para envio.");
+    return;
+  }
+
+  if (!conversationId) {
+    console.warn("⚠️ conversationId ausente para envio Chatwoot.");
+    return;
+  }
+
+  const url = `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/messages`;
+
+  const response = await axios.post(
+    url,
+    {
+      content: texto,
+      message_type: "outgoing",
+      private: isPrivate,
+    },
+    {
+      headers: montarHeadersChatwoot(),
+      timeout: 15000,
+    }
+  );
+
+  console.log(`✅ TEXTO ENVIADO CHATWOOT conv=${conversationId}:`, response.data?.id || "ok");
+  return response.data;
+}
+
+async function abrirConversaHumanaChatwoot(conversationId) {
+  if (!temChatwootConfigurado() || !conversationId) return;
+
+  const url = `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/toggle_status`;
+
+  try {
+    await axios.post(
+      url,
+      { status: "open" },
+      {
+        headers: montarHeadersChatwoot(),
+        timeout: 15000,
+      }
+    );
+    console.log(`👨‍💻 Conversa ${conversationId} aberta para humano no Chatwoot`);
+  } catch (erro) {
+    console.error(
+      `❌ Erro ao abrir conversa humana no Chatwoot (${conversationId}):`,
+      erro.response?.data || erro.message
+    );
+  }
+}
+
+async function marcarConversaResolvidaChatwoot(conversationId) {
+  if (!temChatwootConfigurado() || !conversationId) return;
+
+  const url = `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/toggle_status`;
+
+  try {
+    await axios.post(
+      url,
+      { status: "resolved" },
+      {
+        headers: montarHeadersChatwoot(),
+        timeout: 15000,
+      }
+    );
+    console.log(`✅ Conversa ${conversationId} marcada como resolvida no Chatwoot`);
+  } catch (erro) {
+    console.error(
+      `❌ Erro ao resolver conversa no Chatwoot (${conversationId}):`,
+      erro.response?.data || erro.message
+    );
+  }
+}
+
+// =============================================================================
+// CAMADA DE RESPOSTA POR CANAL
+// =============================================================================
+async function enviarTextoCanal(from, texto, contexto = {}) {
+  const numero = normalizarTelefoneBR(from);
+  if (!numero) {
+    console.warn("⚠️ Número inválido para envio de texto");
+    return;
+  }
+
+  if (!podeEnviar(numero)) {
+    console.log(`🧪 TEST_MODE ativo: envio bloqueado para ${numero}`);
+    return;
+  }
+
+  const origem = contexto.origem || obterUltimoCanal(numero)?.origem || "meta";
+
+  try {
+    if (origem === "chatwoot") {
+      const conversationId =
+        contexto.conversationId || obterUltimoCanal(numero)?.conversationId;
+
+      if (!conversationId) {
+        console.warn(`⚠️ Sem conversationId do Chatwoot para ${numero}. Caindo para Meta.`);
+        await enviarTexto(numero, texto);
+        return;
+      }
+
+      await enviarTextoChatwoot(conversationId, texto);
+      return;
+    }
+
+    await enviarTexto(numero, texto);
+    console.log(`✅ Texto enviado para ${numero}`);
+  } catch (erro) {
+    console.error(
+      `❌ Erro ao enviar texto para ${numero}:`,
+      erro.response?.data || erro.message
+    );
+  }
+}
+
+async function enviarImagemCanal(from, imageUrl, caption = "", contexto = {}) {
+  const numero = normalizarTelefoneBR(from);
+  if (!numero) {
+    console.warn("⚠️ Número inválido para envio de imagem");
+    return;
+  }
+
+  if (!podeEnviar(numero)) {
+    console.log(`🧪 TEST_MODE ativo: imagem bloqueada para ${numero}`);
+    return;
+  }
+
+  const origem = contexto.origem || obterUltimoCanal(numero)?.origem || "meta";
+
+  try {
+    // Para Chatwoot, como o upload de mídia exige outro fluxo,
+    // enviamos legenda + link como fallback seguro.
+    if (origem === "chatwoot") {
+      let mensagem = "";
+      if (caption) mensagem += `${caption}\n\n`;
+      mensagem += `🖼️ Imagem: ${imageUrl}`;
+      await enviarTextoCanal(numero, mensagem, contexto);
+      return;
+    }
+
+    await enviarImagem(numero, imageUrl, caption);
+    console.log(`✅ Imagem enviada para ${numero}`);
+  } catch (erro) {
+    console.error(
+      `❌ Erro ao enviar imagem para ${numero}:`,
+      erro.response?.data || erro.message
+    );
+  }
+}
+
 // =============================================================================
 // MONTAGEM DO MENU
 // =============================================================================
-function montarOpcoeMenu() {
+function montarOpcoesMenu() {
   const opcoes = [];
   let num = 1;
 
-  // Cotação (exibe link se configurado, senão avisa que em breve)
   opcoes.push(`${num++}️⃣ Cotação`);
-  // Pagamentos sempre disponível
   opcoes.push(`${num++}️⃣ Pagamentos`);
-  // Assistência 24h
   opcoes.push(`${num++}️⃣ Acione assistência 24h`);
-  // Vistoria
   opcoes.push(`${num++}️⃣ Vistoria do veículo`);
-  // Falar com atendente
   opcoes.push(`${num++}️⃣ Falar com atendente`);
-  // Avaliar atendimento
   opcoes.push(`${num++}️⃣ Avaliar atendimento`);
-  // Encerrar
   opcoes.push(`${num++}️⃣ Encerrar conversa`);
 
   return opcoes.join("\n");
 }
 
-async function enviarMenu(numero, cliente) {
+async function enviarMenu(numero, cliente, contexto = {}) {
   let saudacao = `🦁 *AVSEG Proteção Veicular*\n\n`;
 
   if (
@@ -212,7 +376,7 @@ async function enviarMenu(numero, cliente) {
   }
 
   saudacao += `Como posso te ajudar hoje?\n\n`;
-  saudacao += montarOpcoeMenu();
+  saudacao += montarOpcoesMenu();
   saudacao += `\n\n`;
   saudacao += `──────────────────\n`;
   saudacao += `📸 *Instagram:* ${INSTAGRAM}\n`;
@@ -220,7 +384,7 @@ async function enviarMenu(numero, cliente) {
   saudacao += `⭐ *Google:* 4,7 — 63 avaliações\n`;
   saudacao += `\n_(Para parar notificações automáticas, responda *0*)_`;
 
-  await enviarImagemSegura(numero, IMAGEM_BOAS_VINDAS, saudacao);
+  await enviarImagemCanal(numero, IMAGEM_BOAS_VINDAS, saudacao, contexto);
 }
 
 // =============================================================================
@@ -304,9 +468,9 @@ function montarMensagemNotificacao(item) {
 // =============================================================================
 // FLUXO DE AVALIAÇÃO
 // =============================================================================
-async function iniciarAvaliacao(from) {
+async function iniciarAvaliacao(from, contexto = {}) {
   estadoUsuario[from] = "avaliacao";
-  await enviarTextoSeguro(
+  await enviarTextoCanal(
     from,
     `⭐ *Avalie nosso atendimento!*\n\n` +
       `Responda com um número de *1 a 5*:\n\n` +
@@ -314,24 +478,30 @@ async function iniciarAvaliacao(from) {
       `2️⃣ — Regular\n` +
       `3️⃣ — Bom\n` +
       `4️⃣ — Ótimo\n` +
-      `5️⃣ — Excelente 😍`
+      `5️⃣ — Excelente 😍`,
+    contexto
   );
 }
 
-async function processarAvaliacao(from, texto) {
+async function processarAvaliacao(from, texto, contexto = {}) {
   const nota = parseInt(texto, 10);
 
   if (isNaN(nota) || nota < 1 || nota > 5) {
-    await enviarTextoSeguro(
+    await enviarTextoCanal(
       from,
-      `❌ Nota inválida. Por favor, responda com um número de *1 a 5*.`
+      `❌ Nota inválida. Por favor, responda com um número de *1 a 5*.`,
+      contexto
     );
     return;
   }
 
   const estrelas = "⭐".repeat(nota);
-  const registros = { telefone: from, nota, data: new Date().toISOString() };
-  avaliacoes.push(registros);
+  avaliacoes.push({
+    telefone: from,
+    nota,
+    data: new Date().toISOString(),
+    origem: contexto.origem || "meta",
+  });
 
   console.log(`📊 Avaliação registrada: ${from} — nota ${nota}/5`);
 
@@ -344,16 +514,17 @@ async function processarAvaliacao(from, texto) {
   };
 
   estadoUsuario[from] = null;
-  await enviarTextoSeguro(
+  await enviarTextoCanal(
     from,
-    `${estrelas}\n\n*Nota ${nota}/5* — ${mensagemNota[nota]}\n\nSe precisar de algo mais, estamos à disposição. Digite *menu* a qualquer momento.`
+    `${estrelas}\n\n*Nota ${nota}/5* — ${mensagemNota[nota]}\n\nSe precisar de algo mais, estamos à disposição. Digite *menu* a qualquer momento.`,
+    contexto
   );
 }
 
 // =============================================================================
-// FLUXO DE PAGAMENTO (2ª via de boleto)
+// FLUXO DE PAGAMENTO
 // =============================================================================
-async function processarPagamento(from, bodyText) {
+async function processarPagamento(from, bodyText, contexto = {}) {
   const http = axiosInterno();
   const somenteNumeros = limparNumeros(bodyText);
 
@@ -369,7 +540,11 @@ async function processarPagamento(from, bodyText) {
     payload.tipo = 3;
     payload.cnpj = somenteNumeros;
   } else {
-    await enviarTextoSeguro(from, "❌ Envie uma placa, CPF (11 dígitos) ou CNPJ (14 dígitos) válido.");
+    await enviarTextoCanal(
+      from,
+      "❌ Envie uma placa, CPF (11 dígitos) ou CNPJ (14 dígitos) válido.",
+      contexto
+    );
     return;
   }
 
@@ -381,14 +556,18 @@ async function processarPagamento(from, bodyText) {
     } catch (erroApi) {
       dados = erroApi.response?.data;
       if (!dados) {
-        await enviarTextoSeguro(from, "❌ Não consegui consultar sua participação mensal agora. Tente novamente em instantes.");
+        await enviarTextoCanal(
+          from,
+          "❌ Não consegui consultar sua participação mensal agora. Tente novamente em instantes.",
+          contexto
+        );
         estadoUsuario[from] = null;
         return;
       }
     }
 
     if (dados?.status === "sucesso" && dados?.mensagemWhatsapp) {
-      await enviarTextoSeguro(from, dados.mensagemWhatsapp);
+      await enviarTextoCanal(from, dados.mensagemWhatsapp, contexto);
 
       const veiculosComLinha = Array.isArray(dados.veiculos)
         ? dados.veiculos.filter(existeLinhaDigitavel)
@@ -396,25 +575,37 @@ async function processarPagamento(from, bodyText) {
 
       for (const v of veiculosComLinha) {
         await delay(500);
-        await enviarTextoSeguro(from, String(v.linhadigitavel).replace(/\s+/g, ""));
+        await enviarTextoCanal(
+          from,
+          String(v.linhadigitavel).replace(/\s+/g, ""),
+          contexto
+        );
       }
 
       await delay(500);
-      await enviarTextoSeguro(from, "Digite *menu* para voltar ao início ou *5* para encerrar.");
+      await enviarTextoCanal(
+        from,
+        "Digite *menu* para voltar ao início ou *5* para encerrar.",
+        contexto
+      );
       estadoUsuario[from] = null;
       return;
     }
 
     if (dados?.status === "erro" && dados?.mensagemWhatsapp) {
-      await enviarTextoSeguro(from, dados.mensagemWhatsapp);
+      await enviarTextoCanal(from, dados.mensagemWhatsapp, contexto);
       await delay(500);
-      await enviarTextoSeguro(from, "Digite *menu* para voltar ao início.");
+      await enviarTextoCanal(from, "Digite *menu* para voltar ao início.", contexto);
       estadoUsuario[from] = null;
       return;
     }
 
     if (!dados || !Array.isArray(dados.veiculos) || dados.veiculos.length === 0) {
-      await enviarTextoSeguro(from, `❌ ${dados?.mensagem || "Nenhum registro encontrado."}`);
+      await enviarTextoCanal(
+        from,
+        `❌ ${dados?.mensagem || "Nenhum registro encontrado."}`,
+        contexto
+      );
       estadoUsuario[from] = null;
       return;
     }
@@ -422,78 +613,101 @@ async function processarPagamento(from, bodyText) {
     const comBoleto = dados.veiculos.filter(existeBoletoDisponivel);
 
     if (comBoleto.length === 0) {
-      await enviarTextoSeguro(from, `⚠️ ${dados?.mensagem || "Cadastro encontrado, mas não há participação mensal em aberto no momento."}`);
+      await enviarTextoCanal(
+        from,
+        `⚠️ ${dados?.mensagem || "Cadastro encontrado, mas não há participação mensal em aberto no momento."}`,
+        contexto
+      );
       estadoUsuario[from] = null;
       return;
     }
 
     for (let i = 0; i < comBoleto.length; i++) {
       const v = comBoleto[i];
-      await enviarTextoSeguro(from, montarResumoVeiculo(v, i));
+      await enviarTextoCanal(from, montarResumoVeiculo(v, i), contexto);
 
       if (existeLinhaDigitavel(v)) {
         await delay(500);
-        await enviarTextoSeguro(from, String(v.linhadigitavel).replace(/\s+/g, ""));
+        await enviarTextoCanal(
+          from,
+          String(v.linhadigitavel).replace(/\s+/g, ""),
+          contexto
+        );
       }
 
       await delay(DELAY_ENVIO_MS);
     }
 
-    await enviarTextoSeguro(from, "Digite *menu* para voltar ao início ou *5* para encerrar.");
+    await enviarTextoCanal(
+      from,
+      "Digite *menu* para voltar ao início ou *5* para encerrar.",
+      contexto
+    );
     estadoUsuario[from] = null;
   } catch (erro) {
     console.error("Erro no fluxo de pagamento:", erro.message);
-    await enviarTextoSeguro(from, "❌ Não consegui consultar sua participação mensal agora. Tente novamente em instantes.");
+    await enviarTextoCanal(
+      from,
+      "❌ Não consegui consultar sua participação mensal agora. Tente novamente em instantes.",
+      contexto
+    );
     estadoUsuario[from] = null;
   }
 }
 
 // =============================================================================
-// PROCESSAMENTO DE MENSAGENS
+// PROCESSAMENTO CENTRAL DE MENSAGENS
 // =============================================================================
-app.on("wa_message", async ({ from, bodyText }) => {
+async function processarMensagem({ from, bodyText, origem = "meta", conversationId = null }) {
   const texto = String(bodyText || "").toLowerCase().trim();
   const http = axiosInterno();
 
-  // ── 0. Se está em modo humano, o atendente responde pelo Meta Business Suite.
-  //       Bot só reage se o cliente pedir para voltar ao bot.
+  const contexto = { origem, conversationId };
+
+  // 0. Se está em modo humano, o bot fica silencioso até o cliente pedir menu/bot.
   if (modoHumano.has(from)) {
     if (["menu", "bot", "oi", "olá", "ola"].includes(texto)) {
       modoHumano.delete(from);
       estadoUsuario[from] = null;
+
+      if (origem === "chatwoot" && conversationId) {
+        await marcarConversaResolvidaChatwoot(conversationId);
+      }
+
       let cliente = null;
       try {
         const resposta = await http.post("/clienteTelefone", { telefone: from });
         cliente = resposta.data;
       } catch (_) {}
-      await enviarMenu(from, cliente);
+
+      await enviarMenu(from, cliente, contexto);
     }
-    // Qualquer outra mensagem: bot silencioso, humano atende pelo Inbox da Meta
     return;
   }
 
-  // ── 1. Se está em fluxo de avaliação
+  // 1. Fluxo avaliação
   if (estadoUsuario[from] === "avaliacao") {
-    await processarAvaliacao(from, texto);
+    await processarAvaliacao(from, texto, contexto);
     return;
   }
 
-  // ── 1b. Se está no submenu de assistência 24h
+  // 1b. Submenu assistência
   if (estadoUsuario[from] === "assistencia") {
     if (texto === "1") {
       estadoUsuario[from] = null;
-      await enviarTextoSeguro(
+      await enviarTextoCanal(
         from,
         `🚨 *Assistência 24h — Roubo ou Furto*\n\n` +
           `Em caso de roubo ou furto do seu veículo, mantenha a calma e siga as orientações:\n\n` +
           `- Ligue imediatamente para o *190* e registre a ocorrência.\n` +
           `- Em seguida, entre em contato com a nossa Assistência 24 horas para darmos continuidade ao atendimento:\n\n` +
           `📞 *${TELEFONE_ASSISTENCIA}*\n\n` +
-          `Estamos prontos para te ajudar.`
+          `Estamos prontos para te ajudar.`,
+        contexto
       );
     } else if (texto === "2") {
       estadoUsuario[from] = null;
-      await enviarTextoSeguro(
+      await enviarTextoCanal(
         from,
         `🛠️ *Assistência 24h — Pane Mecânica, Guincho ou Chaveiro*\n\n` +
           `Se precisar de ajuda, siga as orientações abaixo:\n\n` +
@@ -502,11 +716,12 @@ app.on("wa_message", async ({ from, bodyText }) => {
           `🔑 Em situações de chaveiro (perda, quebra ou chave trancada no veículo), enviaremos um profissional para te auxiliar.\n\n` +
           `Para agilizar o atendimento, tenha sua localização em mãos e ligue imediatamente para nossa Central:\n\n` +
           `📞 *${TELEFONE_ASSISTENCIA}*\n\n` +
-          `Estamos à disposição para cuidar de você! 💛`
+          `Estamos à disposição para cuidar de você! 💛`,
+        contexto
       );
     } else if (texto === "3") {
       estadoUsuario[from] = null;
-      await enviarTextoSeguro(
+      await enviarTextoCanal(
         from,
         `💥 *Assistência 24h — Colisão, Acidente, Danos a Terceiros ou Incêndio*\n\n` +
           `Em caso de sinistro, siga as orientações:\n\n` +
@@ -514,27 +729,30 @@ app.on("wa_message", async ({ from, bodyText }) => {
           `- Em caso de colisão ou danos a terceiros, ligue para o *190* para registro da ocorrência.\n` +
           `- Em seguida, entre em contato com a nossa Assistência 24 horas para darmos continuidade ao atendimento:\n\n` +
           `📞 *${TELEFONE_ASSISTENCIA}*\n\n` +
-          `Estamos aqui para te orientar e prestar todo o suporte necessário.`
+          `Estamos aqui para te orientar e prestar todo o suporte necessário.`,
+        contexto
       );
     } else {
-      await enviarTextoSeguro(
+      await enviarTextoCanal(
         from,
         `❌ Opção inválida. Por favor, responda com *1*, *2* ou *3*:\n\n` +
           `1️⃣ 🚨 Roubo ou Furto\n` +
           `2️⃣ 🛠️ Pane, Guincho ou Chaveiro\n` +
-          `3️⃣ 💥 Colisão, Acidente ou Incêndio`
+          `3️⃣ 💥 Colisão, Acidente ou Incêndio`,
+        contexto
       );
     }
     return;
   }
 
-  // ── 2. Opt-out / opt-in de notificações
+  // 2. Opt-out / opt-in
   if (texto === "0" || texto === "parar") {
     usuariosOptOut.add(from);
     estadoUsuario[from] = null;
-    await enviarTextoSeguro(
+    await enviarTextoCanal(
       from,
-      `✅ *Notificações preventivas desativadas.*\n\nVocê não receberá mais os lembretes de 5 e 2 dias antes do vencimento.\n\nSe quiser voltar a receber, digite *voltar*.`
+      `✅ *Notificações preventivas desativadas.*\n\nVocê não receberá mais os lembretes de 5 e 2 dias antes do vencimento.\n\nSe quiser voltar a receber, digite *voltar*.`,
+      contexto
     );
     return;
   }
@@ -542,14 +760,15 @@ app.on("wa_message", async ({ from, bodyText }) => {
   if (texto === "voltar") {
     usuariosOptOut.delete(from);
     estadoUsuario[from] = null;
-    await enviarTextoSeguro(
+    await enviarTextoCanal(
       from,
-      `✅ *Notificações ativadas novamente!*\n\nVocê voltará a receber nossos lembretes preventivos. Obrigado!`
+      `✅ *Notificações ativadas novamente!*\n\nVocê voltará a receber nossos lembretes preventivos. Obrigado!`,
+      contexto
     );
     return;
   }
 
-  // ── 3. Abertura de menu
+  // 3. Menu
   if (["oi", "olá", "ola", "menu", "inicio", "início"].includes(texto)) {
     estadoUsuario[from] = null;
     let cliente = null;
@@ -557,114 +776,169 @@ app.on("wa_message", async ({ from, bodyText }) => {
       const resposta = await http.post("/clienteTelefone", { telefone: from });
       cliente = resposta.data;
     } catch (_) {}
-    await enviarMenu(from, cliente);
+    await enviarMenu(from, cliente, contexto);
     return;
   }
 
-  // ── 4. Se uma placa foi enviada diretamente, já vai para pagamento
+  // 4. Placa enviada direto
   if (parecePlaca(bodyText)) {
     estadoUsuario[from] = "pagamento";
   }
 
-  // ── 5. Opções do menu ────────────────────────────────────────────────────────
-
-  // 1 — Cotação
+  // 5. Menu
   if (texto === "1") {
     if (LINK_COTACAO) {
-      await enviarTextoSeguro(from, `📋 *Cotação*\n\nAcesse o link abaixo e faça sua cotação:\n\n🔗 ${LINK_COTACAO}`);
-    } else {
-      await enviarTextoSeguro(
+      await enviarTextoCanal(
         from,
-        `📋 *Cotação*\n\nNosso sistema de cotação online estará disponível em breve! 🚀\n\nPor enquanto, nosso time pode te ajudar. Digite *5️⃣* para falar com um atendente.`
+        `📋 *Cotação*\n\nAcesse o link abaixo e faça sua cotação:\n\n🔗 ${LINK_COTACAO}`,
+        contexto
+      );
+    } else {
+      await enviarTextoCanal(
+        from,
+        `📋 *Cotação*\n\nNosso sistema de cotação online estará disponível em breve! 🚀\n\nPor enquanto, nosso time pode te ajudar. Digite *5* para falar com um atendente.`,
+        contexto
       );
     }
     return;
   }
 
-  // 2 — Pagamentos
   if (texto === "2") {
     estadoUsuario[from] = "pagamento";
-    await enviarTextoSeguro(
+    await enviarTextoCanal(
       from,
-      `💳 *Pagamentos — 2ª via da participação mensal*\n\nEnvie um dos dados abaixo:\n\n• 📋 CPF do titular\n• 🏢 CNPJ\n• 🚗 Placa do veículo`
+      `💳 *Pagamentos — 2ª via da participação mensal*\n\nEnvie um dos dados abaixo:\n\n• 📋 CPF do titular\n• 🏢 CNPJ\n• 🚗 Placa do veículo`,
+      contexto
     );
     return;
   }
 
-  // 3 — Acione assistência 24h (submenu)
   if (texto === "3") {
     estadoUsuario[from] = "assistencia";
-    await enviarTextoSeguro(
+    await enviarTextoCanal(
       from,
       `🚨 *Acione Assistência 24h*\n\n` +
         `Para receber o atendimento adequado, selecione o que aconteceu:\n\n` +
         `1️⃣ 🚨 Roubo ou Furto\n` +
         `2️⃣ 🛠️ Pane, Guincho ou Chaveiro\n` +
-        `3️⃣ 💥 Colisão, Acidente ou Incêndio`
+        `3️⃣ 💥 Colisão, Acidente ou Incêndio`,
+      contexto
     );
     return;
   }
 
-  // 4 — Vistoria do veículo
   if (texto === "4") {
     if (LINK_VISTORIA) {
-      await enviarTextoSeguro(from, `🔍 *Vistoria do Veículo*\n\nAgende sua vistoria pelo link:\n\n🔗 ${LINK_VISTORIA}`);
-    } else {
-      await enviarTextoSeguro(
+      await enviarTextoCanal(
         from,
-        `🔍 *Vistoria do Veículo*\n\nO agendamento online de vistoria estará disponível em breve! 🚀\n\nPor enquanto, fale com nosso time. Digite *5️⃣* para ser atendido por um especialista.`
+        `🔍 *Vistoria do Veículo*\n\nAgende sua vistoria pelo link:\n\n🔗 ${LINK_VISTORIA}`,
+        contexto
+      );
+    } else {
+      await enviarTextoCanal(
+        from,
+        `🔍 *Vistoria do Veículo*\n\nO agendamento online de vistoria estará disponível em breve! 🚀\n\nPor enquanto, fale com nosso time. Digite *5* para ser atendido por um especialista.`,
+        contexto
       );
     }
     return;
   }
 
-  // 5 — Falar com atendente (PRIORIDADE — handover para Meta Business Suite)
+  // 5 — Falar com atendente
   if (texto === "5") {
     modoHumano.add(from);
     estadoUsuario[from] = null;
-    await enviarTextoSeguro(
+
+    await enviarTextoCanal(
       from,
       `👨‍💻 *Atendimento Humano*\n\n` +
-        `Você será atendido por um de nossos especialistas agora mesmo! ✅\n\n` +
-        `Nossa equipe irá responder em instantes por este mesmo WhatsApp.\n\n` +
-        `_Se quiser voltar ao menu automático a qualquer momento, basta digitar *menu*._`
+        `Você será atendido por um de nossos especialistas em instantes. ✅\n\n` +
+        `Se quiser voltar ao menu automático, basta digitar *menu*.`,
+      contexto
     );
-    console.log(`👤 Atendimento humano ativado para ${from}`);
+
+    if (origem === "chatwoot" && conversationId) {
+      await abrirConversaHumanaChatwoot(conversationId);
+    }
+
+    console.log(`👤 Atendimento humano ativado para ${from} via ${origem}`);
     return;
   }
 
-  // 6 — Avaliar atendimento
   if (texto === "6") {
-    await iniciarAvaliacao(from);
+    await iniciarAvaliacao(from, contexto);
     return;
   }
 
-  // 7 — Encerrar conversa
   if (["7", "encerrar", "finalizar", "sair"].includes(texto)) {
     estadoUsuario[from] = null;
     modoHumano.delete(from);
-    await enviarTextoSeguro(
+
+    await enviarTextoCanal(
       from,
-      `✅ *Conversa encerrada.*\n\nFoi um prazer te atender! 😊\n\nQuando precisar, é só enviar *oi* ou *menu*. Estaremos aqui!\n\n🦁 *AVSEG Proteção Veicular*`
+      `✅ *Conversa encerrada.*\n\nFoi um prazer te atender! 😊\n\nQuando precisar, é só enviar *oi* ou *menu*. Estaremos aqui!\n\n🦁 *AVSEG Proteção Veicular*`,
+      contexto
     );
+
+    if (origem === "chatwoot" && conversationId) {
+      await marcarConversaResolvidaChatwoot(conversationId);
+    }
+
     return;
   }
 
-  // ── 6. Fluxo de pagamento (estado ativo ou placa enviada diretamente)
+  // 6. Pagamento
   if (estadoUsuario[from] === "pagamento") {
-    await processarPagamento(from, bodyText);
+    await processarPagamento(from, bodyText, contexto);
     return;
   }
 
-  // ── 7. Mensagem não reconhecida
-  await enviarTextoSeguro(
+  // 7. Fallback
+  await enviarTextoCanal(
     from,
-    `Não entendi sua mensagem. 😅\n\nDigite *menu* para ver todas as opções disponíveis.`
+    `Não entendi sua mensagem. 😅\n\nDigite *menu* para ver todas as opções disponíveis.`,
+    contexto
   );
+}
+
+// =============================================================================
+// EVENTOS — META
+// =============================================================================
+app.on("wa_message", async ({ from, bodyText }) => {
+  atualizarUltimoCanal(from, {
+    origem: "meta",
+  });
+
+  await processarMensagem({
+    from,
+    bodyText,
+    origem: "meta",
+    conversationId: null,
+  });
 });
 
 // =============================================================================
-// CRON — NOTIFICAÇÕES DIÁRIAS (09:00)
+// EVENTOS — CHATWOOT
+// Requer que o api.js emita "chatwoot_message"
+// =============================================================================
+app.on("chatwoot_message", async ({ from, bodyText, conversationId, raw }) => {
+  atualizarUltimoCanal(from, {
+    origem: "chatwoot",
+    conversationId,
+    inboxId: raw?.conversation?.inbox_id || null,
+    contactId: raw?.sender?.id || raw?.contact?.id || null,
+  });
+
+  await processarMensagem({
+    from,
+    bodyText,
+    origem: "chatwoot",
+    conversationId,
+  });
+});
+
+// =============================================================================
+// CRON — NOTIFICAÇÕES DIÁRIAS
 // =============================================================================
 if (ENABLE_CRON) {
   cron.schedule("0 9 * * *", async () => {
@@ -685,7 +959,6 @@ if (ENABLE_CRON) {
         const telefone = normalizarTelefoneBR(item?.telefone || "");
         if (!telefone) continue;
 
-        // Não envia lembretes preventivos para quem fez opt-out
         if (
           usuariosOptOut.has(telefone) &&
           (item.tipo === "lembrete_5" || item.tipo === "lembrete_2")
@@ -694,7 +967,6 @@ if (ENABLE_CRON) {
           continue;
         }
 
-        // Não interrompe atendimento humano ativo com notificações automáticas
         if (modoHumano.has(telefone)) {
           console.log(`⏭️ Modo humano: ${telefone} ignorado (${item.tipo})`);
           continue;
@@ -703,12 +975,16 @@ if (ENABLE_CRON) {
         const mensagem = montarMensagemNotificacao(item);
         if (!mensagem) continue;
 
-        await enviarTextoSeguro(telefone, mensagem);
+        // Notificação automática continua indo pela Meta
+        await enviarTextoCanal(telefone, mensagem, { origem: "meta" });
 
-        // Se tem boleto disponível, envia o link junto na notificação
         if (item.url && item.url !== "ND" && item.tipo !== "aniversario") {
           await delay(500);
-          await enviarTextoSeguro(telefone, `🔗 *Acesse sua participação mensal:*\n${item.url}`);
+          await enviarTextoCanal(
+            telefone,
+            `🔗 *Acesse sua participação mensal:*\n${item.url}`,
+            { origem: "meta" }
+          );
         }
 
         await delay(DELAY_ENVIO_MS);
@@ -726,20 +1002,15 @@ if (ENABLE_CRON) {
 }
 
 // =============================================================================
-// ROTA DE DIAGNÓSTICO — avaliacoes
+// ROTAS DE DIAGNÓSTICO
 // =============================================================================
-const { protegerRotaInterna } = (() => {
-  const INTERNAL_API_KEY_LOCAL = process.env.INTERNAL_API_KEY;
-  return {
-    protegerRotaInterna: (req, res, next) => {
-      const chave = req.headers["x-api-key"];
-      if (!INTERNAL_API_KEY_LOCAL || chave !== INTERNAL_API_KEY_LOCAL) {
-        return res.status(401).json({ status: "erro", mensagem: "Não autorizado" });
-      }
-      next();
-    },
-  };
-})();
+function protegerRotaInterna(req, res, next) {
+  const chave = req.headers["x-api-key"];
+  if (!INTERNAL_API_KEY || chave !== INTERNAL_API_KEY) {
+    return res.status(401).json({ status: "erro", mensagem: "Não autorizado" });
+  }
+  next();
+}
 
 app.get("/avaliacoes", protegerRotaInterna, (req, res) => {
   const media =
@@ -761,4 +1032,13 @@ app.get("/modo-humano", protegerRotaInterna, (req, res) => {
   });
 });
 
-console.log(`🤖 Bot iniciado. TEST_MODE=${TEST_MODE ? "ON" : "OFF"}`);
+app.get("/canais", protegerRotaInterna, (req, res) => {
+  res.json({
+    total: Object.keys(ultimoCanalPorNumero).length,
+    canais: ultimoCanalPorNumero,
+  });
+});
+
+console.log(
+  `🤖 Bot iniciado. TEST_MODE=${TEST_MODE ? "ON" : "OFF"} | CHATWOOT=${temChatwootConfigurado() ? "ON" : "OFF"}`
+);
