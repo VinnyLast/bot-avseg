@@ -18,7 +18,7 @@ const DELAY_ENVIO_MS = 3000;
 
 const IMAGEM_BOAS_VINDAS =
   process.env.IMAGEM_URL ||
-  "https://raw.githubusercontent.com/VinnyLast/bot-avseg/refs/heads/main/imagem.jpg";
+  "https://raw.githubusercontent.com/VinnyLast/bot-avseg/refs/heads/main/imagem.jpeg";
 
 const TEST_MODE = process.env.TEST_MODE === "true";
 const ENABLE_CRON = process.env.ENABLE_CRON === "true";
