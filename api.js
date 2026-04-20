@@ -147,7 +147,7 @@ app.get("/webhook", (req, res) => {
 });
 
 // =============================================================================
-// WEBHOOK — recebimento de mensagens (POST)
+// WEBHOOK E CHATWOOT— recebimento de mensagens (POST)
 // =============================================================================
 app.post("/webhook", (req, res) => {
   console.log("WEBHOOK RECEBIDO");
@@ -183,22 +183,61 @@ app.post("/chatwoot-bot", async (req, res) => {
     console.log("CHATWOOT BOT RECEBIDO");
     console.log(JSON.stringify(req.body, null, 2));
 
-    const mensagem = req.body?.content || "";
+    const body = req.body || {};
+
+    // Processa somente mensagens recebidas do cliente
+    if (body.message_type !== "incoming") {
+      console.log("⏭️ Ignorado: message_type diferente de incoming");
+      return res.status(200).json({ message: "ok" });
+    }
+
+    // Ignora mensagens privadas/notas internas
+    if (body.private === true) {
+      console.log("⏭️ Ignorado: mensagem privada");
+      return res.status(200).json({ message: "ok" });
+    }
+
+    // Ignora mensagens enviadas por agente/bot/sistema
+    const senderType = String(body?.sender?.type || "").toLowerCase();
+    if (senderType && senderType !== "contact") {
+      console.log(`⏭️ Ignorado: sender.type=${senderType}`);
+      return res.status(200).json({ message: "ok" });
+    }
+
+    // Alguns eventos podem vir sem conteúdo útil
+    const mensagem = String(
+      body?.content ||
+      body?.message?.content ||
+      ""
+    ).trim();
+
     const contato =
-      req.body?.conversation?.meta?.sender?.phone_number ||
-      req.body?.contact?.phone_number ||
+      body?.conversation?.meta?.sender?.phone_number ||
+      body?.sender?.phone_number ||
+      body?.contact?.phone_number ||
       "";
 
     const from = normalizarTelefoneBR(contato);
 
+    const conversationId =
+      body?.conversation?.id ||
+      body?.conversation_id ||
+      null;
+
+    // ID da mensagem do Chatwoot, útil para evitar duplicidade no bot.js se quiser
+    const messageId = body?.id || body?.message?.id || null;
+
     if (!from || !mensagem) {
+      console.log("⏭️ Ignorado: sem telefone ou sem mensagem");
       return res.status(200).json({ message: "ok" });
     }
 
     app.emit("chatwoot_message", {
       from,
       bodyText: mensagem,
-      raw: req.body,
+      conversationId,
+      messageId,
+      raw: body,
     });
 
     return res.status(200).json({
