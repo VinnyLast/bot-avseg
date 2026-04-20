@@ -27,12 +27,15 @@ const ALLOWED_NUMBERS = new Set(
   String(process.env.ALLOWED_NUMBERS || "")
     .split(",")
     .map((n) => normalizarTelefoneBR(n))
-    .filter(Boolean)
+    .filter(Boolean),
 );
 
 // Chatwoot
 const CHATWOOT_ENABLED = process.env.CHATWOOT_ENABLED === "true";
-const CHATWOOT_BASE_URL = String(process.env.CHATWOOT_BASE_URL || "").replace(/\/+$/, "");
+const CHATWOOT_BASE_URL = String(process.env.CHATWOOT_BASE_URL || "").replace(
+  /\/+$/,
+  "",
+);
 const CHATWOOT_API_TOKEN = process.env.CHATWOOT_API_TOKEN || "";
 const CHATWOOT_ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID || "";
 
@@ -71,15 +74,22 @@ function parecePlaca(texto) {
     .toUpperCase()
     .replace(/\s+/g, "")
     .replace("-", "");
-  return /^[A-Z]{3}[0-9]{4}$/.test(valor) || /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/.test(valor);
+  return (
+    /^[A-Z]{3}[0-9]{4}$/.test(valor) ||
+    /^[A-Z]{3}[0-9][A-Z][0-9]{2}$/.test(valor)
+  );
 }
 
 function normalizarPlaca(texto) {
-  return String(texto || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return String(texto || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
 }
 
 function formatarValor(valor) {
-  if (valor === null || valor === undefined || valor === "" || valor === "ND") return "ND";
+  if (valor === null || valor === undefined || valor === "" || valor === "ND")
+    return "ND";
   const numero = Number(String(valor).replace(",", "."));
   if (Number.isNaN(numero)) return String(valor);
   return numero.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -96,7 +106,11 @@ function formatarDataBR(data) {
 }
 
 function existeLinhaDigitavel(v) {
-  return Boolean(v?.linhadigitavel && v.linhadigitavel !== "ND" && String(v.linhadigitavel).trim() !== "");
+  return Boolean(
+    v?.linhadigitavel &&
+    v.linhadigitavel !== "ND" &&
+    String(v.linhadigitavel).trim() !== "",
+  );
 }
 
 function existeBoletoDisponivel(v) {
@@ -104,7 +118,7 @@ function existeBoletoDisponivel(v) {
     (v?.url && v.url !== "ND") ||
     (v?.linhadigitavel && v.linhadigitavel !== "ND") ||
     (v?.valor && v.valor !== "ND") ||
-    (v?.vencimento && v.vencimento !== "ND")
+    (v?.vencimento && v.vencimento !== "ND"),
   );
 }
 
@@ -119,7 +133,10 @@ function axiosInterno() {
   return axios.create({
     baseURL: API_BASE_URL,
     timeout: 20000,
-    headers: { "x-api-key": INTERNAL_API_KEY, "Content-Type": "application/json" },
+    headers: {
+      "x-api-key": INTERNAL_API_KEY,
+      "Content-Type": "application/json",
+    },
   });
 }
 
@@ -136,11 +153,19 @@ function obterUltimoCanal(from) {
 }
 
 function temChatwootConfigurado() {
-  return Boolean(CHATWOOT_ENABLED && CHATWOOT_BASE_URL && CHATWOOT_API_TOKEN && CHATWOOT_ACCOUNT_ID);
+  return Boolean(
+    CHATWOOT_ENABLED &&
+    CHATWOOT_BASE_URL &&
+    CHATWOOT_API_TOKEN &&
+    CHATWOOT_ACCOUNT_ID,
+  );
 }
 
 function montarHeadersChatwoot() {
-  return { api_access_token: CHATWOOT_API_TOKEN, "Content-Type": "application/json" };
+  return {
+    api_access_token: CHATWOOT_API_TOKEN,
+    "Content-Type": "application/json",
+  };
 }
 
 // =============================================================================
@@ -157,7 +182,7 @@ async function criarOuBuscarContatoChatwoot(telefone, nome = "Associado") {
         params: { q: telefone, page: 1 },
         headers: montarHeadersChatwoot(),
         timeout: 10000,
-      }
+      },
     );
     const contatos = busca.data?.payload || [];
     if (contatos.length > 0) {
@@ -171,12 +196,15 @@ async function criarOuBuscarContatoChatwoot(telefone, nome = "Associado") {
     const criado = await axios.post(
       `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/contacts`,
       { name: nome, phone_number: `+${telefone}` },
-      { headers: montarHeadersChatwoot(), timeout: 10000 }
+      { headers: montarHeadersChatwoot(), timeout: 10000 },
     );
     console.log(`✅ Contato criado no Chatwoot: ${criado.data?.id}`);
     return criado.data?.id;
   } catch (erro) {
-    console.error("❌ Erro ao criar contato:", erro.response?.data || erro.message);
+    console.error(
+      "❌ Erro ao criar contato:",
+      erro.response?.data || erro.message,
+    );
     return null;
   }
 }
@@ -191,11 +219,13 @@ async function criarConversaChatwoot(telefone, nome = "Associado") {
     // Busca o inbox WhatsApp
     const inboxes = await axios.get(
       `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/inboxes`,
-      { headers: montarHeadersChatwoot(), timeout: 10000 }
+      { headers: montarHeadersChatwoot(), timeout: 10000 },
     );
 
     const inbox = inboxes.data?.payload?.find((i) =>
-      String(i.channel_type || "").toLowerCase().includes("whatsapp")
+      String(i.channel_type || "")
+        .toLowerCase()
+        .includes("whatsapp"),
     );
 
     if (!inbox) {
@@ -206,14 +236,17 @@ async function criarConversaChatwoot(telefone, nome = "Associado") {
     const conversa = await axios.post(
       `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations`,
       { inbox_id: inbox.id, contact_id: contactId, status: "open" },
-      { headers: montarHeadersChatwoot(), timeout: 10000 }
+      { headers: montarHeadersChatwoot(), timeout: 10000 },
     );
 
     const conversationId = conversa.data?.id;
     console.log(`✅ Conversa criada no Chatwoot: ${conversationId}`);
     return conversationId;
   } catch (erro) {
-    console.error("❌ Erro ao criar conversa:", erro.response?.data || erro.message);
+    console.error(
+      "❌ Erro ao criar conversa:",
+      erro.response?.data || erro.message,
+    );
     return null;
   }
 }
@@ -226,10 +259,13 @@ async function enviarTextoChatwoot(conversationId, texto, isPrivate = false) {
   const response = await axios.post(
     url,
     { content: texto, message_type: "outgoing", private: isPrivate },
-    { headers: montarHeadersChatwoot(), timeout: 15000 }
+    { headers: montarHeadersChatwoot(), timeout: 15000 },
   );
 
-  console.log(`✅ TEXTO ENVIADO CHATWOOT conv=${conversationId}:`, response.data?.id || "ok");
+  console.log(
+    `✅ TEXTO ENVIADO CHATWOOT conv=${conversationId}:`,
+    response.data?.id || "ok",
+  );
   return response.data;
 }
 
@@ -240,11 +276,14 @@ async function abrirConversaHumanaChatwoot(conversationId) {
     await axios.post(
       `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/toggle_status`,
       { status: "open" },
-      { headers: montarHeadersChatwoot(), timeout: 15000 }
+      { headers: montarHeadersChatwoot(), timeout: 15000 },
     );
     console.log(`👨‍💻 Conversa ${conversationId} aberta para humano no Chatwoot`);
   } catch (erro) {
-    console.error(`❌ Erro ao abrir conversa humana:`, erro.response?.data || erro.message);
+    console.error(
+      `❌ Erro ao abrir conversa humana:`,
+      erro.response?.data || erro.message,
+    );
   }
 }
 
@@ -255,11 +294,14 @@ async function marcarConversaResolvidaChatwoot(conversationId) {
     await axios.post(
       `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/toggle_status`,
       { status: "resolved" },
-      { headers: montarHeadersChatwoot(), timeout: 15000 }
+      { headers: montarHeadersChatwoot(), timeout: 15000 },
     );
     console.log(`✅ Conversa ${conversationId} resolvida no Chatwoot`);
   } catch (erro) {
-    console.error(`❌ Erro ao resolver conversa:`, erro.response?.data || erro.message);
+    console.error(
+      `❌ Erro ao resolver conversa:`,
+      erro.response?.data || erro.message,
+    );
   }
 }
 
@@ -278,7 +320,8 @@ async function enviarTextoCanal(from, texto, contexto = {}) {
 
   try {
     if (origem === "chatwoot") {
-      const conversationId = contexto.conversationId || obterUltimoCanal(numero)?.conversationId;
+      const conversationId =
+        contexto.conversationId || obterUltimoCanal(numero)?.conversationId;
       if (!conversationId) {
         await enviarTexto(numero, texto);
         return;
@@ -289,7 +332,10 @@ async function enviarTextoCanal(from, texto, contexto = {}) {
     await enviarTexto(numero, texto);
     console.log(`✅ Texto enviado para ${numero}`);
   } catch (erro) {
-    console.error(`❌ Erro ao enviar texto para ${numero}:`, erro.response?.data || erro.message);
+    console.error(
+      `❌ Erro ao enviar texto para ${numero}:`,
+      erro.response?.data || erro.message,
+    );
   }
 }
 
@@ -306,10 +352,7 @@ async function enviarImagemCanal(from, imageUrl, caption = "", contexto = {}) {
 
     console.log(`✅ Imagem enviada para ${numero}`);
   } catch (erro) {
-    console.error(
-      "Erro enviando imagem:",
-      erro.response?.data || erro.message
-    );
+    console.error("Erro enviando imagem:", erro.response?.data || erro.message);
 
     // fallback só se der erro de verdade
     if (caption) {
@@ -336,7 +379,12 @@ function montarOpcoesMenu() {
 async function enviarMenu(numero, cliente, contexto = {}) {
   let saudacao = `🦁 *AVSEG Proteção Veicular*\n\n`;
 
-  if (cliente && !cliente.erro && Array.isArray(cliente.veiculos) && cliente.veiculos.length) {
+  if (
+    cliente &&
+    !cliente.erro &&
+    Array.isArray(cliente.veiculos) &&
+    cliente.veiculos.length
+  ) {
     saudacao += `Olá *${cliente.nome || "Associado"}*! 👋\n\n🚗 *Seus veículos:*\n\n`;
     cliente.veiculos.forEach((v, i) => {
       saudacao += `${i + 1}️⃣ Placa: ${v.placa || "ND"}\n📅 Vencimento: ${v.vencimento || "ND"}\n\n`;
@@ -434,7 +482,7 @@ async function iniciarAvaliacao(from, contexto = {}) {
   await enviarTextoCanal(
     from,
     `⭐ *Avalie nosso atendimento!*\n\nResponda com um número de *1 a 5*:\n\n1️⃣ — Ruim\n2️⃣ — Regular\n3️⃣ — Bom\n4️⃣ — Ótimo\n5️⃣ — Excelente 😍`,
-    contexto
+    contexto,
   );
 }
 
@@ -442,12 +490,21 @@ async function processarAvaliacao(from, texto, contexto = {}) {
   const nota = parseInt(texto, 10);
 
   if (isNaN(nota) || nota < 1 || nota > 5) {
-    await enviarTextoCanal(from, `❌ Nota inválida. Por favor, responda com um número de *1 a 5*.`, contexto);
+    await enviarTextoCanal(
+      from,
+      `❌ Nota inválida. Por favor, responda com um número de *1 a 5*.`,
+      contexto,
+    );
     return;
   }
 
   const estrelas = "⭐".repeat(nota);
-  avaliacoes.push({ telefone: from, nota, data: new Date().toISOString(), origem: contexto.origem || "meta" });
+  avaliacoes.push({
+    telefone: from,
+    nota,
+    data: new Date().toISOString(),
+    origem: contexto.origem || "meta",
+  });
   console.log(`📊 Avaliação registrada: ${from} — nota ${nota}/5`);
 
   const mensagemNota = {
@@ -462,7 +519,7 @@ async function processarAvaliacao(from, texto, contexto = {}) {
   await enviarTextoCanal(
     from,
     `${estrelas}\n\n*Nota ${nota}/5* — ${mensagemNota[nota]}\n\nSe precisar de algo mais, estamos à disposição. Digite *menu* a qualquer momento.`,
-    contexto
+    contexto,
   );
 }
 
@@ -484,7 +541,11 @@ async function processarPagamento(from, bodyText, contexto = {}) {
     payload.tipo = 3;
     payload.cnpj = somenteNumeros;
   } else {
-    await enviarTextoCanal(from, "❌ Envie uma placa, CPF (11 dígitos) ou CNPJ (14 dígitos) válido.", contexto);
+    await enviarTextoCanal(
+      from,
+      "❌ Envie uma placa, CPF (11 dígitos) ou CNPJ (14 dígitos) válido.",
+      contexto,
+    );
     return;
   }
 
@@ -496,7 +557,11 @@ async function processarPagamento(from, bodyText, contexto = {}) {
     } catch (erroApi) {
       dados = erroApi.response?.data;
       if (!dados) {
-        await enviarTextoCanal(from, "❌ Não consegui consultar sua participação mensal agora. Tente novamente em instantes.", contexto);
+        await enviarTextoCanal(
+          from,
+          "❌ Não consegui consultar sua participação mensal agora. Tente novamente em instantes.",
+          contexto,
+        );
         estadoUsuario[from] = null;
         return;
       }
@@ -505,14 +570,24 @@ async function processarPagamento(from, bodyText, contexto = {}) {
     if (dados?.status === "sucesso" && dados?.mensagemWhatsapp) {
       await enviarTextoCanal(from, dados.mensagemWhatsapp, contexto);
 
-      const veiculosComLinha = Array.isArray(dados.veiculos) ? dados.veiculos.filter(existeLinhaDigitavel) : [];
+      const veiculosComLinha = Array.isArray(dados.veiculos)
+        ? dados.veiculos.filter(existeLinhaDigitavel)
+        : [];
       for (const v of veiculosComLinha) {
         await delay(500);
-        await enviarTextoCanal(from, String(v.linhadigitavel).replace(/\s+/g, ""), contexto);
+        await enviarTextoCanal(
+          from,
+          String(v.linhadigitavel).replace(/\s+/g, ""),
+          contexto,
+        );
       }
 
       await delay(500);
-      await enviarTextoCanal(from, "Digite *menu* para voltar ao início ou *7* para encerrar.", contexto);
+      await enviarTextoCanal(
+        from,
+        "Digite *menu* para voltar ao início ou *7* para encerrar.",
+        contexto,
+      );
       estadoUsuario[from] = null;
       return;
     }
@@ -520,13 +595,25 @@ async function processarPagamento(from, bodyText, contexto = {}) {
     if (dados?.status === "erro" && dados?.mensagemWhatsapp) {
       await enviarTextoCanal(from, dados.mensagemWhatsapp, contexto);
       await delay(500);
-      await enviarTextoCanal(from, "Digite *menu* para voltar ao início.", contexto);
+      await enviarTextoCanal(
+        from,
+        "Digite *menu* para voltar ao início.",
+        contexto,
+      );
       estadoUsuario[from] = null;
       return;
     }
 
-    if (!dados || !Array.isArray(dados.veiculos) || dados.veiculos.length === 0) {
-      await enviarTextoCanal(from, `❌ ${dados?.mensagem || "Nenhum registro encontrado."}`, contexto);
+    if (
+      !dados ||
+      !Array.isArray(dados.veiculos) ||
+      dados.veiculos.length === 0
+    ) {
+      await enviarTextoCanal(
+        from,
+        `❌ ${dados?.mensagem || "Nenhum registro encontrado."}`,
+        contexto,
+      );
       estadoUsuario[from] = null;
       return;
     }
@@ -534,7 +621,11 @@ async function processarPagamento(from, bodyText, contexto = {}) {
     const comBoleto = dados.veiculos.filter(existeBoletoDisponivel);
 
     if (comBoleto.length === 0) {
-      await enviarTextoCanal(from, `⚠️ ${dados?.mensagem || "Cadastro encontrado, mas não há participação mensal em aberto no momento."}`, contexto);
+      await enviarTextoCanal(
+        from,
+        `⚠️ ${dados?.mensagem || "Cadastro encontrado, mas não há participação mensal em aberto no momento."}`,
+        contexto,
+      );
       estadoUsuario[from] = null;
       return;
     }
@@ -544,16 +635,28 @@ async function processarPagamento(from, bodyText, contexto = {}) {
       await enviarTextoCanal(from, montarResumoVeiculo(v, i), contexto);
       if (existeLinhaDigitavel(v)) {
         await delay(500);
-        await enviarTextoCanal(from, String(v.linhadigitavel).replace(/\s+/g, ""), contexto);
+        await enviarTextoCanal(
+          from,
+          String(v.linhadigitavel).replace(/\s+/g, ""),
+          contexto,
+        );
       }
       await delay(DELAY_ENVIO_MS);
     }
 
-    await enviarTextoCanal(from, "Digite *menu* para voltar ao início ou *7* para encerrar.", contexto);
+    await enviarTextoCanal(
+      from,
+      "Digite *menu* para voltar ao início ou *7* para encerrar.",
+      contexto,
+    );
     estadoUsuario[from] = null;
   } catch (erro) {
     console.error("Erro no fluxo de pagamento:", erro.message);
-    await enviarTextoCanal(from, "❌ Não consegui consultar sua participação mensal agora. Tente novamente em instantes.", contexto);
+    await enviarTextoCanal(
+      from,
+      "❌ Não consegui consultar sua participação mensal agora. Tente novamente em instantes.",
+      contexto,
+    );
     estadoUsuario[from] = null;
   }
 }
@@ -561,8 +664,15 @@ async function processarPagamento(from, bodyText, contexto = {}) {
 // =============================================================================
 // PROCESSAMENTO CENTRAL DE MENSAGENS
 // =============================================================================
-async function processarMensagem({ from, bodyText, origem = "meta", conversationId = null }) {
-  const texto = String(bodyText || "").toLowerCase().trim();
+async function processarMensagem({
+  from,
+  bodyText,
+  origem = "meta",
+  conversationId = null,
+}) {
+  const texto = String(bodyText || "")
+    .toLowerCase()
+    .trim();
   const http = axiosInterno();
   const contexto = { origem, conversationId };
 
@@ -578,7 +688,9 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
 
       let cliente = null;
       try {
-        const resposta = await http.post("/clienteTelefone", { telefone: from });
+        const resposta = await http.post("/clienteTelefone", {
+          telefone: from,
+        });
         cliente = resposta.data;
       } catch (_) {}
 
@@ -597,32 +709,44 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
   if (estadoUsuario[from] === "assistencia") {
     if (texto === "1") {
       estadoUsuario[from] = null;
-      await enviarTextoCanal(from,
+      await enviarTextoCanal(
+        from,
         `🚨 *Assistência 24h — Roubo ou Furto*\n\n` +
-        `Em caso de roubo ou furto do seu veículo, mantenha a calma e siga as orientações:\n\n` +
-        `1️⃣ Ligue imediatamente para o *190* e registre a ocorrência.\n` +
-        `2️⃣ Em seguida, entre em contato com a nossa Assistência 24 horas:\n\n` +
-        `📞 *${TELEFONE_ASSISTENCIA}*\n\nEstamos prontos para te ajudar.`, contexto);
+          `Em caso de roubo ou furto do seu veículo, mantenha a calma e siga as orientações:\n\n` +
+          `1️⃣ Ligue imediatamente para o *190* e registre a ocorrência.\n` +
+          `2️⃣ Em seguida, entre em contato com a nossa Assistência 24 horas:\n\n` +
+          `📞 *${TELEFONE_ASSISTENCIA}*\n\nEstamos prontos para te ajudar.`,
+        contexto,
+      );
     } else if (texto === "2") {
       estadoUsuario[from] = null;
-      await enviarTextoCanal(from,
+      await enviarTextoCanal(
+        from,
         `🛠️ *Assistência 24h — Pane Mecânica, Guincho ou Chaveiro*\n\n` +
-        `🔧 Em caso de pane mecânica, solicite atendimento para avaliação no local.\n` +
-        `🚗 Se necessário, acionaremos o guincho para remoção do veículo.\n` +
-        `🔑 Em situações de chaveiro, enviaremos um profissional para te auxiliar.\n\n` +
-        `📞 *${TELEFONE_ASSISTENCIA}*\n\nEstamos à disposição para cuidar de você! 💛`, contexto);
+          `🔧 Em caso de pane mecânica, solicite atendimento para avaliação no local.\n` +
+          `🚗 Se necessário, acionaremos o guincho para remoção do veículo.\n` +
+          `🔑 Em situações de chaveiro, enviaremos um profissional para te auxiliar.\n\n` +
+          `📞 *${TELEFONE_ASSISTENCIA}*\n\nEstamos à disposição para cuidar de você! 💛`,
+        contexto,
+      );
     } else if (texto === "3") {
       estadoUsuario[from] = null;
-      await enviarTextoCanal(from,
+      await enviarTextoCanal(
+        from,
         `💥 *Assistência 24h — Colisão, Acidente, Danos a Terceiros ou Incêndio*\n\n` +
-        `1️⃣ Verifique se há vítimas e acione o *192* (SAMU) ou *193* (Bombeiros) se necessário.\n` +
-        `2️⃣ Em caso de colisão ou danos, ligue para o *190* para registro da ocorrência.\n` +
-        `3️⃣ Em seguida, entre em contato com a nossa Assistência 24 horas:\n\n` +
-        `📞 *${TELEFONE_ASSISTENCIA}*\n\nEstamos aqui para te orientar e prestar todo o suporte necessário.`, contexto);
+          `1️⃣ Verifique se há vítimas e acione o *192* (SAMU) ou *193* (Bombeiros) se necessário.\n` +
+          `2️⃣ Em caso de colisão ou danos, ligue para o *190* para registro da ocorrência.\n` +
+          `3️⃣ Em seguida, entre em contato com a nossa Assistência 24 horas:\n\n` +
+          `📞 *${TELEFONE_ASSISTENCIA}*\n\nEstamos aqui para te orientar e prestar todo o suporte necessário.`,
+        contexto,
+      );
     } else {
-      await enviarTextoCanal(from,
+      await enviarTextoCanal(
+        from,
         `❌ Opção inválida. Por favor, responda com *1*, *2* ou *3*:\n\n` +
-        `1️⃣ 🚨 Roubo ou Furto\n2️⃣ 🛠️ Pane, Guincho ou Chaveiro\n3️⃣ 💥 Colisão, Acidente ou Incêndio`, contexto);
+          `1️⃣ 🚨 Roubo ou Furto\n2️⃣ 🛠️ Pane, Guincho ou Chaveiro\n3️⃣ 💥 Colisão, Acidente ou Incêndio`,
+        contexto,
+      );
     }
     return;
   }
@@ -631,15 +755,22 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
   if (texto === "0" || texto === "parar") {
     usuariosOptOut.add(from);
     estadoUsuario[from] = null;
-    await enviarTextoCanal(from,
-      `✅ *Notificações preventivas desativadas.*\n\nVocê não receberá mais os lembretes de 5 e 2 dias antes do vencimento.\n\nSe quiser voltar a receber, digite *voltar*.`, contexto);
+    await enviarTextoCanal(
+      from,
+      `✅ *Notificações preventivas desativadas.*\n\nVocê não receberá mais os lembretes de 5 e 2 dias antes do vencimento.\n\nSe quiser voltar a receber, digite *voltar*.`,
+      contexto,
+    );
     return;
   }
 
   if (texto === "voltar") {
     usuariosOptOut.delete(from);
     estadoUsuario[from] = null;
-    await enviarTextoCanal(from, `✅ *Notificações ativadas novamente!*\n\nVocê voltará a receber nossos lembretes preventivos. Obrigado!`, contexto);
+    await enviarTextoCanal(
+      from,
+      `✅ *Notificações ativadas novamente!*\n\nVocê voltará a receber nossos lembretes preventivos. Obrigado!`,
+      contexto,
+    );
     return;
   }
 
@@ -662,34 +793,73 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
 
   // 5. Opções do menu
   if (texto === "1") {
-    if (LINK_COTACAO) {
-      await enviarTextoCanal(from, `📋 *Cotação*\n\nAcesse o link abaixo e faça sua cotação:\n\n🔗 ${LINK_COTACAO}`, contexto);
-    } else {
-      await enviarTextoCanal(from, `📋 *Cotação*\n\nNosso sistema de cotação online estará disponível em breve! 🚀\n\nPor enquanto, nosso time pode te ajudar. Digite *5* para falar com um atendente.`, contexto);
-    }
+    await enviarTextoCanal(
+      from,
+      `📱 *Cotação pelo Aplicativo AVSEG*
+
+Segue o link do aplicativo AVSEG para download:
+
+🤖 Android:
+https://play.google.com/store/apps/details?id=com.avsegappcliente
+
+🍎 iOS:
+https://apps.apple.com/app/avseg-associado/id6645736685
+
+🔐 Seu usuário e senha são os números do seu CPF.
+
+Após instalar, acesse o app e siga o caminho:
+
+📋 Menu > Cotação
+
+Fico à disposição em caso de dúvidas!`,
+      contexto,
+    );
     return;
   }
 
   if (texto === "2") {
     estadoUsuario[from] = "pagamento";
-    await enviarTextoCanal(from, `💳 *Pagamentos — 2ª via da participação mensal*\n\nEnvie um dos dados abaixo:\n\n• 📋 CPF do titular\n• 🏢 CNPJ\n• 🚗 Placa do veículo`, contexto);
+    await enviarTextoCanal(
+      from,
+      `💳 *Pagamentos — 2ª via da participação mensal*\n\nEnvie um dos dados abaixo:\n\n• 📋 CPF do titular\n• 🏢 CNPJ\n• 🚗 Placa do veículo`,
+      contexto,
+    );
     return;
   }
 
   if (texto === "3") {
     estadoUsuario[from] = "assistencia";
-    await enviarTextoCanal(from,
+    await enviarTextoCanal(
+      from,
       `🚨 *Acione Assistência 24h*\n\nPara receber o atendimento adequado, selecione o que aconteceu:\n\n` +
-      `1️⃣ 🚨 Roubo ou Furto\n2️⃣ 🛠️ Pane, Guincho ou Chaveiro\n3️⃣ 💥 Colisão, Acidente ou Incêndio`, contexto);
+        `1️⃣ 🚨 Roubo ou Furto\n2️⃣ 🛠️ Pane, Guincho ou Chaveiro\n3️⃣ 💥 Colisão, Acidente ou Incêndio`,
+      contexto,
+    );
     return;
   }
 
   if (texto === "4") {
-    if (LINK_VISTORIA) {
-      await enviarTextoCanal(from, `🔍 *Vistoria do Veículo*\n\nAgende sua vistoria pelo link:\n\n🔗 ${LINK_VISTORIA}`, contexto);
-    } else {
-      await enviarTextoCanal(from, `🔍 *Vistoria do Veículo*\n\nO agendamento online de vistoria estará disponível em breve! 🚀\n\nPor enquanto, fale com nosso time. Digite *5* para ser atendido por um especialista.`, contexto);
-    }
+    await enviarTextoCanal(
+      from,
+      `📱 *Vistoria pelo Aplicativo AVSEG*
+
+Segue o link do aplicativo AVSEG para download:
+
+🤖 Android:
+https://play.google.com/store/apps/details?id=com.avsegappcliente
+
+🍎 iOS:
+https://apps.apple.com/app/avseg-associado/id6645736685
+
+🔐 Seu usuário e senha são os números do seu CPF.
+
+Após instalar, acesse o app e siga o caminho:
+
+🔍 Menu > Vistoria > Iniciar
+
+Fico à disposição em caso de dúvidas!`,
+      contexto,
+    );
     return;
   }
 
@@ -698,8 +868,11 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
     modoHumano.add(from);
     estadoUsuario[from] = null;
 
-    await enviarTextoCanal(from,
-      `👨‍💻 *Atendimento Humano*\n\nVocê será atendido por um de nossos especialistas em instantes. ✅\n\nSe quiser voltar ao menu automático, basta digitar *menu*.`, contexto);
+    await enviarTextoCanal(
+      from,
+      `👨‍💻 *Atendimento Humano*\n\nVocê será atendido por um de nossos especialistas em instantes. ✅\n\nSe quiser voltar ao menu automático, basta digitar *menu*.`,
+      contexto,
+    );
 
     // Cria ou abre conversa no Chatwoot
     if (temChatwootConfigurado()) {
@@ -716,9 +889,10 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
         if (convId) {
           atualizarUltimoCanal(from, { conversationId: convId });
           // Envia nota interna no Chatwoot informando o contexto
-          await enviarTextoChatwoot(convId,
+          await enviarTextoChatwoot(
+            convId,
             `🤖 Cliente solicitou atendimento humano via WhatsApp.\nNúmero: +${from}`,
-            true // nota privada
+            true, // nota privada
           );
         }
       } catch (erro) {
@@ -739,8 +913,11 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
     estadoUsuario[from] = null;
     modoHumano.delete(from);
 
-    await enviarTextoCanal(from,
-      `✅ *Conversa encerrada.*\n\nFoi um prazer te atender! 😊\n\nQuando precisar, é só enviar *oi* ou *menu*. Estaremos aqui!\n\n🦁 *AVSEG Proteção Veicular*`, contexto);
+    await enviarTextoCanal(
+      from,
+      `✅ *Conversa encerrada.*\n\nFoi um prazer te atender! 😊\n\nQuando precisar, é só enviar *oi* ou *menu*. Estaremos aqui!\n\n🦁 *AVSEG Proteção Veicular*`,
+      contexto,
+    );
 
     const canal = obterUltimoCanal(from);
     const convId = conversationId || canal?.conversationId;
@@ -755,7 +932,11 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
   }
 
   // Fallback
-  await enviarTextoCanal(from, `Não entendi sua mensagem. 😅\n\nDigite *menu* para ver todas as opções disponíveis.`, contexto);
+  await enviarTextoCanal(
+    from,
+    `Não entendi sua mensagem. 😅\n\nDigite *menu* para ver todas as opções disponíveis.`,
+    contexto,
+  );
 }
 
 // =============================================================================
@@ -763,7 +944,12 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
 // =============================================================================
 app.on("wa_message", async ({ from, bodyText }) => {
   atualizarUltimoCanal(from, { origem: "meta" });
-  await processarMensagem({ from, bodyText, origem: "meta", conversationId: null });
+  await processarMensagem({
+    from,
+    bodyText,
+    origem: "meta",
+    conversationId: null,
+  });
 });
 
 // =============================================================================
@@ -777,7 +963,12 @@ app.on("chatwoot_message", async ({ from, bodyText, conversationId, raw }) => {
     contactId: raw?.sender?.id || raw?.contact?.id || null,
   });
 
-  await processarMensagem({ from, bodyText, origem: "chatwoot", conversationId });
+  await processarMensagem({
+    from,
+    bodyText,
+    origem: "chatwoot",
+    conversationId,
+  });
 });
 
 // =============================================================================
@@ -790,7 +981,9 @@ if (ENABLE_CRON) {
 
     try {
       const resposta = await http.get("/notificacoes-pendentes");
-      const notificacoes = Array.isArray(resposta.data?.notificacoes) ? resposta.data.notificacoes : [];
+      const notificacoes = Array.isArray(resposta.data?.notificacoes)
+        ? resposta.data.notificacoes
+        : [];
 
       console.log(`📋 Total de notificações: ${notificacoes.length}`);
       console.log("📊 Resumo:", JSON.stringify(resposta.data?.resumo || {}));
@@ -799,7 +992,10 @@ if (ENABLE_CRON) {
         const telefone = normalizarTelefoneBR(item?.telefone || "");
         if (!telefone) continue;
 
-        if (usuariosOptOut.has(telefone) && (item.tipo === "lembrete_5" || item.tipo === "lembrete_2")) {
+        if (
+          usuariosOptOut.has(telefone) &&
+          (item.tipo === "lembrete_5" || item.tipo === "lembrete_2")
+        ) {
           console.log(`⏭️ Opt-out: ${telefone} ignorado (${item.tipo})`);
           continue;
         }
@@ -816,7 +1012,11 @@ if (ENABLE_CRON) {
 
         if (item.url && item.url !== "ND" && item.tipo !== "aniversario") {
           await delay(500);
-          await enviarTextoCanal(telefone, `🔗 *Acesse sua participação mensal:*\n${item.url}`, { origem: "meta" });
+          await enviarTextoCanal(
+            telefone,
+            `🔗 *Acesse sua participação mensal:*\n${item.url}`,
+            { origem: "meta" },
+          );
         }
 
         await delay(DELAY_ENVIO_MS);
@@ -824,7 +1024,10 @@ if (ENABLE_CRON) {
 
       console.log("✅ Rotina de notificações concluída.");
     } catch (erro) {
-      console.error("❌ Erro na rotina de notificações:", erro.response?.data || erro.message);
+      console.error(
+        "❌ Erro na rotina de notificações:",
+        erro.response?.data || erro.message,
+      );
     }
   });
 
@@ -845,9 +1048,12 @@ function protegerRotaInterna(req, res, next) {
 }
 
 app.get("/avaliacoes", protegerRotaInterna, (req, res) => {
-  const media = avaliacoes.length > 0
-    ? (avaliacoes.reduce((s, a) => s + a.nota, 0) / avaliacoes.length).toFixed(2)
-    : null;
+  const media =
+    avaliacoes.length > 0
+      ? (
+          avaliacoes.reduce((s, a) => s + a.nota, 0) / avaliacoes.length
+        ).toFixed(2)
+      : null;
   res.json({ total: avaliacoes.length, media, avaliacoes });
 });
 
@@ -856,7 +1062,12 @@ app.get("/modo-humano", protegerRotaInterna, (req, res) => {
 });
 
 app.get("/canais", protegerRotaInterna, (req, res) => {
-  res.json({ total: Object.keys(ultimoCanalPorNumero).length, canais: ultimoCanalPorNumero });
+  res.json({
+    total: Object.keys(ultimoCanalPorNumero).length,
+    canais: ultimoCanalPorNumero,
+  });
 });
 
-console.log(`🤖 Bot iniciado. TEST_MODE=${TEST_MODE ? "ON" : "OFF"} | CHATWOOT=${temChatwootConfigurado() ? "ON" : "OFF"}`);
+console.log(
+  `🤖 Bot iniciado. TEST_MODE=${TEST_MODE ? "ON" : "OFF"} | CHATWOOT=${temChatwootConfigurado() ? "ON" : "OFF"}`,
+);
