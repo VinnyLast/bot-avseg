@@ -5,6 +5,7 @@ const axios = require("axios");
 const dayjs = require("dayjs");
 
 const app = express();
+app.use(express.static("public"));
 app.use(express.json({ limit: "1mb" }));
 
 const PORT = Number(process.env.PORT || 10000);
