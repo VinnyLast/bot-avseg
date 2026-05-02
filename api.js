@@ -207,9 +207,7 @@ app.post("/chatwoot-bot", async (req, res) => {
 
     // Alguns eventos podem vir sem conteúdo útil
     const mensagem = String(
-      body?.content ||
-      body?.message?.content ||
-      ""
+      body?.content || body?.message?.content || "",
     ).trim();
 
     const contato =
@@ -221,9 +219,7 @@ app.post("/chatwoot-bot", async (req, res) => {
     const from = normalizarTelefoneBR(contato);
 
     const conversationId =
-      body?.conversation?.id ||
-      body?.conversation_id ||
-      null;
+      body?.conversation?.id || body?.conversation_id || null;
 
     // ID da mensagem do Chatwoot, útil para evitar duplicidade no bot.js se quiser
     const messageId = body?.id || body?.message?.id || null;
@@ -249,6 +245,7 @@ app.post("/chatwoot-bot", async (req, res) => {
     return res.status(200).json({ responses: [] });
   }
 });
+
 // =============================================================================
 // ENVIO DE MENSAGENS
 // =============================================================================
@@ -268,7 +265,7 @@ async function enviarTexto(to, texto) {
           "Content-Type": "application/json",
         },
         timeout: 15000,
-      }
+      },
     );
     console.log(`✅ TEXTO ENVIADO para ${to}:`, response.data);
   } catch (erro) {
@@ -292,11 +289,14 @@ async function enviarImagem(to, imageUrl, caption = "") {
           "Content-Type": "application/json",
         },
         timeout: 15000,
-      }
+      },
     );
     console.log(`✅ IMAGEM ENVIADA para ${to}:`, response.data);
   } catch (erro) {
-    console.error(`❌ ERRO META (imagem):`, erro.response?.data || erro.message);
+    console.error(
+      `❌ ERRO META (imagem):`,
+      erro.response?.data || erro.message,
+    );
   }
 }
 
@@ -334,12 +334,20 @@ function normalizarVeiculoI9(v) {
     matricula: v?.matricula || v?.Matricula || "ND",
     placa: v?.placa || v?.Placa || "ND",
     vencimento:
-      v?.vencimento || v?.Vencimento || v?.data_vencimento || v?.DataVencimento || "ND",
+      v?.vencimento ||
+      v?.Vencimento ||
+      v?.data_vencimento ||
+      v?.DataVencimento ||
+      "ND",
     valor: v?.valor || v?.Valor || v?.valor_boleto || v?.ValorBoleto || "ND",
     status: v?.status || v?.Status || "ND",
     url: v?.url || v?.Url || v?.link || v?.Link || "ND",
     linhadigitavel:
-      v?.linhadigitavel || v?.linha_digitavel || v?.LinhaDigitavel || v?.linhaDigitavel || "ND",
+      v?.linhadigitavel ||
+      v?.linha_digitavel ||
+      v?.LinhaDigitavel ||
+      v?.linhaDigitavel ||
+      "ND",
     nome: v?.nome || v?.Nome || "Cliente",
     documento: v?.documento || v?.Documento || "ND",
     telefone: normalizarTelefoneBR(v?.telefone || v?.Telefone || ""),
@@ -347,13 +355,14 @@ function normalizarVeiculoI9(v) {
 }
 
 function temResultadoI9(dados) {
-  if (!Array.isArray(dados?.veiculos) || dados.veiculos.length === 0) return false;
+  if (!Array.isArray(dados?.veiculos) || dados.veiculos.length === 0)
+    return false;
   return dados.veiculos.some(
     (v) =>
       (v.url && v.url !== "ND") ||
       (v.linhadigitavel && v.linhadigitavel !== "ND") ||
       (v.vencimento && v.vencimento !== "ND") ||
-      (v.valor && v.valor !== "ND")
+      (v.valor && v.valor !== "ND"),
   );
 }
 
@@ -365,7 +374,7 @@ function adaptarResultadoI9(dadosI9) {
       (v.url && v.url !== "ND") ||
       (v.linhadigitavel && v.linhadigitavel !== "ND") ||
       (v.vencimento && v.vencimento !== "ND") ||
-      (v.valor && v.valor !== "ND")
+      (v.valor && v.valor !== "ND"),
   );
 
   if (validos.length > 0) {
@@ -379,9 +388,12 @@ function adaptarResultadoI9(dadosI9) {
 
   return {
     status: "erro",
-    mensagem: dadosI9?.mensagem || "Cadastro encontrado no I9, mas sem boleto disponível",
+    mensagem:
+      dadosI9?.mensagem ||
+      "Cadastro encontrado no I9, mas sem boleto disponível",
     veiculos: [],
-    mensagemWhatsapp: "❌ Cadastro encontrado, mas não há boleto disponível no momento.",
+    mensagemWhatsapp:
+      "❌ Cadastro encontrado, mas não há boleto disponível no momento.",
   };
 }
 
@@ -467,9 +479,12 @@ async function i9BuscarVencimentosPorPlacas(placas, dataAlvo, tipoNotificacao) {
             });
           }
         } catch (erro) {
-          console.warn(`⚠️ I9 vencimentos — erro na placa ${placa}:`, extrairErro(erro));
+          console.warn(
+            `⚠️ I9 vencimentos — erro na placa ${placa}:`,
+            extrairErro(erro),
+          );
         }
-      })
+      }),
     );
   }
 
@@ -483,26 +498,40 @@ async function i9BuscarVencimentosPorPlacas(placas, dataAlvo, tipoNotificacao) {
  */
 async function i9BuscarVencimentos(dataAlvo, tipoNotificacao) {
   try {
-    const boletosDoSouth = await southBuscarVencimentos(dataAlvo, tipoNotificacao);
+    const boletosDoSouth = await southBuscarVencimentos(
+      dataAlvo,
+      tipoNotificacao,
+    );
     const placas = [
       ...new Set(
-        boletosDoSouth
-          .map((b) => normalizarPlaca(b.placa))
-          .filter(Boolean)
+        boletosDoSouth.map((b) => normalizarPlaca(b.placa)).filter(Boolean),
       ),
     ];
 
     if (!placas.length) {
-      console.log(`ℹ️ I9 [${tipoNotificacao}]: sem placas no South para ${dataAlvo}`);
+      console.log(
+        `ℹ️ I9 [${tipoNotificacao}]: sem placas no South para ${dataAlvo}`,
+      );
       return [];
     }
 
-    console.log(`🔍 I9 [${tipoNotificacao}]: consultando ${placas.length} placa(s) — ${dataAlvo}`);
-    const resultados = await i9BuscarVencimentosPorPlacas(placas, dataAlvo, tipoNotificacao);
-    console.log(`✅ I9 [${tipoNotificacao}]: ${resultados.length} resultado(s)`);
+    console.log(
+      `🔍 I9 [${tipoNotificacao}]: consultando ${placas.length} placa(s) — ${dataAlvo}`,
+    );
+    const resultados = await i9BuscarVencimentosPorPlacas(
+      placas,
+      dataAlvo,
+      tipoNotificacao,
+    );
+    console.log(
+      `✅ I9 [${tipoNotificacao}]: ${resultados.length} resultado(s)`,
+    );
     return resultados;
   } catch (erro) {
-    console.error(`❌ Erro i9BuscarVencimentos [${tipoNotificacao}]:`, extrairErro(erro));
+    console.error(
+      `❌ Erro i9BuscarVencimentos [${tipoNotificacao}]:`,
+      extrairErro(erro),
+    );
     return [];
   }
 }
@@ -524,7 +553,7 @@ async function southBuscarAssociado(placaOuDocumento) {
       {
         headers: { Accept: "application/json", Authorization: SOUTH_TOKEN },
         timeout: 15000,
-      }
+      },
     );
 
     return resposta.data;
@@ -540,36 +569,43 @@ async function southBuscarAniversariantes() {
   const dia = hoje.date();
 
   try {
-    const resposta = await axios.get(`${SOUTH_BASE_URL}Clientes/aniversariantes`, {
-      params: { Mes: mes, Dia: dia },
-      headers: { Authorization: SOUTH_TOKEN, Accept: "application/json" },
-      timeout: 15000,
-    });
+    const resposta = await axios.get(
+      `${SOUTH_BASE_URL}Clientes/aniversariantes`,
+      {
+        params: { Mes: mes, Dia: dia },
+        headers: { Authorization: SOUTH_TOKEN, Accept: "application/json" },
+        timeout: 15000,
+      },
+    );
 
     const dados = resposta.data;
     const lista = Array.isArray(dados)
       ? dados
       : Array.isArray(dados?.dados)
-      ? dados.dados
-      : Array.isArray(dados?.Dados)
-      ? dados.Dados
-      : Array.isArray(dados?.Result)
-      ? dados.Result
-      : [];
+        ? dados.dados
+        : Array.isArray(dados?.Dados)
+          ? dados.Dados
+          : Array.isArray(dados?.Result)
+            ? dados.Result
+            : [];
 
     return lista.map((cli) => ({
       nome: cli.IndividuosNome || "Associado",
       telefone: normalizarTelefoneBR(
         cli.IndividuosContatosDdd && cli.IndividuosContatosTelefone
           ? `55${cli.IndividuosContatosDdd}${cli.IndividuosContatosTelefone}`
-          : cli.IndividuosContatosTelefone || ""
+          : cli.IndividuosContatosTelefone || "",
       ),
       tipo: "aniversario",
       dataNascimento: cli.IndividuosDataNascimento || "",
       sistema: "south",
     }));
   } catch (erro) {
-    console.error("❌ Erro Aniversariantes:", erro.response?.status, erro.response?.data || erro.message);
+    console.error(
+      "❌ Erro Aniversariantes:",
+      erro.response?.status,
+      erro.response?.data || erro.message,
+    );
     return [];
   }
 }
@@ -582,10 +618,34 @@ async function southBuscarVencimentos(dataAlvo, tipoNotificacao) {
 
   const payloads = [];
   for (const dataFormatada of formatosData) {
-    payloads.push({ DataInicial: dataFormatada, DataFinal: dataFormatada, Situacao: 1, FormaPagamento: 1, count: 100, page: 1 });
-    payloads.push({ DataInicial: dataFormatada, DataFinal: dataFormatada, Situacao: 4, count: 100, page: 1 });
-    payloads.push({ DataInicial: dataFormatada, DataFinal: dataFormatada, FormaPagamento: 1, count: 100, page: 1 });
-    payloads.push({ DataInicial: dataFormatada, DataFinal: dataFormatada, count: 100, page: 1 });
+    payloads.push({
+      DataInicial: dataFormatada,
+      DataFinal: dataFormatada,
+      Situacao: 1,
+      FormaPagamento: 1,
+      count: 100,
+      page: 1,
+    });
+    payloads.push({
+      DataInicial: dataFormatada,
+      DataFinal: dataFormatada,
+      Situacao: 4,
+      count: 100,
+      page: 1,
+    });
+    payloads.push({
+      DataInicial: dataFormatada,
+      DataFinal: dataFormatada,
+      FormaPagamento: 1,
+      count: 100,
+      page: 1,
+    });
+    payloads.push({
+      DataInicial: dataFormatada,
+      DataFinal: dataFormatada,
+      count: 100,
+      page: 1,
+    });
   }
 
   for (const payloadBase of payloads) {
@@ -596,25 +656,29 @@ async function southBuscarVencimentos(dataAlvo, tipoNotificacao) {
       const payload = { ...payloadBase, page: pagina };
 
       try {
-        const resposta = await axios.post(`${SOUTH_BASE_URL}Boletos/lista`, payload, {
-          headers: {
-            Authorization: SOUTH_TOKEN,
-            "Content-Type": "application/json",
-            Accept: "application/json",
+        const resposta = await axios.post(
+          `${SOUTH_BASE_URL}Boletos/lista`,
+          payload,
+          {
+            headers: {
+              Authorization: SOUTH_TOKEN,
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            timeout: 15000,
           },
-          timeout: 15000,
-        });
+        );
 
         const dadosBrutos = resposta.data;
         const lista = Array.isArray(dadosBrutos)
           ? dadosBrutos
           : Array.isArray(dadosBrutos?.dados)
-          ? dadosBrutos.dados
-          : Array.isArray(dadosBrutos?.Dados)
-          ? dadosBrutos.Dados
-          : Array.isArray(dadosBrutos?.Result)
-          ? dadosBrutos.Result
-          : [];
+            ? dadosBrutos.dados
+            : Array.isArray(dadosBrutos?.Dados)
+              ? dadosBrutos.Dados
+              : Array.isArray(dadosBrutos?.Result)
+                ? dadosBrutos.Result
+                : [];
 
         if (!lista.length) break;
         todos.push(...lista);
@@ -623,7 +687,9 @@ async function southBuscarVencimentos(dataAlvo, tipoNotificacao) {
       } catch (erro) {
         const status = erro.response?.status;
         const dadosErro = erro.response?.data;
-        const msgErro = String(dadosErro?.erro || dadosErro?.mensagem || "").toLowerCase();
+        const msgErro = String(
+          dadosErro?.erro || dadosErro?.mensagem || "",
+        ).toLowerCase();
 
         if (
           msgErro.includes("nenhum registro") ||
@@ -633,7 +699,10 @@ async function southBuscarVencimentos(dataAlvo, tipoNotificacao) {
           break;
         }
 
-        console.error(`❌ Erro real em ${tipoNotificacao}:`, dadosErro || erro.message);
+        console.error(
+          `❌ Erro real em ${tipoNotificacao}:`,
+          dadosErro || erro.message,
+        );
         break;
       }
     }
@@ -643,14 +712,16 @@ async function southBuscarVencimentos(dataAlvo, tipoNotificacao) {
         nome: boleto.IndividuosNome || boleto.Nome || "Associado",
         telefone: normalizarTelefoneBR(
           boleto.IndividuosContatosDdd &&
-            (boleto.IndividuosContatosContato || boleto.IndividuosContatosTelefone)
+            (boleto.IndividuosContatosContato ||
+              boleto.IndividuosContatosTelefone)
             ? `55${boleto.IndividuosContatosDdd}${
-                boleto.IndividuosContatosContato || boleto.IndividuosContatosTelefone
+                boleto.IndividuosContatosContato ||
+                boleto.IndividuosContatosTelefone
               }`
             : boleto.IndividuosContatosContato ||
-              boleto.IndividuosContatosTelefone ||
-              boleto.Telefone ||
-              ""
+                boleto.IndividuosContatosTelefone ||
+                boleto.Telefone ||
+                "",
         ),
         placa: boleto.VendasPlaca || boleto.Placa || "ND",
         vencimento:
@@ -661,7 +732,10 @@ async function southBuscarVencimentos(dataAlvo, tipoNotificacao) {
         valor: boleto.FaturasValor || boleto.Valor || "ND",
         url: boleto.UrlBoleto || "ND",
         linhadigitavel:
-          boleto.FaturasLinhaDigitavel || boleto.Faturasemv || boleto.linhadigitavel || "ND",
+          boleto.FaturasLinhaDigitavel ||
+          boleto.Faturasemv ||
+          boleto.linhadigitavel ||
+          "ND",
         tipo: tipoNotificacao,
         sistema: "south",
       }));
@@ -685,8 +759,10 @@ async function southSegundaViaBoletos({ placa, documento }) {
         associado?.Dados?.CarrosPlaca ||
         associado?.Dados?.VendasCarrosPlacaImplemento;
 
-      if (!docFinal && docAssociado) docFinal = normalizarDocumento(docAssociado);
-      if (!placaFinal && placaAssociado) placaFinal = normalizarPlaca(placaAssociado);
+      if (!docFinal && docAssociado)
+        docFinal = normalizarDocumento(docAssociado);
+      if (!placaFinal && placaAssociado)
+        placaFinal = normalizarPlaca(placaAssociado);
     }
 
     if (!placaFinal || !docFinal) {
@@ -694,7 +770,8 @@ async function southSegundaViaBoletos({ placa, documento }) {
         status: "erro",
         mensagem: "Não foi possível localizar placa e documento",
         veiculos: [],
-        mensagemWhatsapp: "❌ Não foi possível localizar os dados do associado.",
+        mensagemWhatsapp:
+          "❌ Não foi possível localizar os dados do associado.",
       };
     }
 
@@ -708,7 +785,7 @@ async function southSegundaViaBoletos({ placa, documento }) {
           Authorization: SOUTH_TOKEN,
         },
         timeout: 15000,
-      }
+      },
     );
 
     const data = resposta.data;
@@ -724,7 +801,8 @@ async function southSegundaViaBoletos({ placa, documento }) {
     const veiculo = {
       matricula: data.FaturasId || "ND",
       placa: data.VendasPlaca || placaFinal,
-      vencimento: data.FaturasDataOriginal || data.FaturasDataVencimento || "ND",
+      vencimento:
+        data.FaturasDataOriginal || data.FaturasDataVencimento || "ND",
       valor: data.FaturasValor || data.FaturasValorReal || "ND",
       url: data.UrlBoleto || "ND",
       linhadigitavel: data.Faturasemv || "ND",
@@ -733,7 +811,7 @@ async function southSegundaViaBoletos({ placa, documento }) {
       telefone: normalizarTelefoneBR(
         data.IndividuosContatosDdd && data.IndividuosContatosContato
           ? `55${data.IndividuosContatosDdd}${data.IndividuosContatosContato}`
-          : ""
+          : "",
       ),
     };
 
@@ -749,7 +827,8 @@ async function southSegundaViaBoletos({ placa, documento }) {
       status: "erro",
       mensagem: "Erro ao consultar boleto na South",
       veiculos: [],
-      mensagemWhatsapp: "❌ Não foi possível consultar o boleto. Tente novamente.",
+      mensagemWhatsapp:
+        "❌ Não foi possível consultar o boleto. Tente novamente.",
     };
   }
 }
@@ -778,7 +857,8 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
         status: "erro",
         mensagem: "Informe ao menos placa, cpf, cnpj ou documento",
         veiculos: [],
-        mensagemWhatsapp: "❌ Informe os dados necessários para consultar o boleto.",
+        mensagemWhatsapp:
+          "❌ Informe os dados necessários para consultar o boleto.",
       });
     }
 
@@ -786,44 +866,68 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
     const cnpjFinal = normalizarDocumento(cnpj || "");
 
     if (sistema === "i9") {
-      const dadosI9 = await consultarBoletoI9({ tipo, cpf: cpfFinal, cnpj: cnpjFinal, placa: placaFinal });
+      const dadosI9 = await consultarBoletoI9({
+        tipo,
+        cpf: cpfFinal,
+        cnpj: cnpjFinal,
+        placa: placaFinal,
+      });
       const resultadoI9 = adaptarResultadoI9(dadosI9);
 
-      if (temResultadoI9(resultadoI9)) return res.json({ sistema: "i9", ...resultadoI9 });
+      if (temResultadoI9(resultadoI9))
+        return res.json({ sistema: "i9", ...resultadoI9 });
 
       return res.status(404).json({
         sistema: "i9",
         status: "erro",
         mensagem: resultadoI9.mensagem || "Nenhum boleto encontrado no I9",
         veiculos: [],
-        mensagemWhatsapp: resultadoI9.mensagemWhatsapp || montarMensagemSemResultado(entradaExibicao),
+        mensagemWhatsapp:
+          resultadoI9.mensagemWhatsapp ||
+          montarMensagemSemResultado(entradaExibicao),
       });
     }
 
     if (sistema === "south") {
-      const dadosSouth = await southSegundaViaBoletos({ placa: placaFinal, documento: docFinal });
+      const dadosSouth = await southSegundaViaBoletos({
+        placa: placaFinal,
+        documento: docFinal,
+      });
 
-      if (temResultadoSouth(dadosSouth)) return res.json({ sistema: "south", ...dadosSouth });
+      if (temResultadoSouth(dadosSouth))
+        return res.json({ sistema: "south", ...dadosSouth });
 
       return res.status(404).json({
         sistema: "south",
         ...dadosSouth,
-        mensagemWhatsapp: dadosSouth.mensagemWhatsapp || montarMensagemSemResultado(entradaExibicao),
+        mensagemWhatsapp:
+          dadosSouth.mensagemWhatsapp ||
+          montarMensagemSemResultado(entradaExibicao),
       });
     }
 
     // Tenta I9 primeiro, depois fallback para South
     try {
-      const dadosI9 = await consultarBoletoI9({ tipo, cpf: cpfFinal, cnpj: cnpjFinal, placa: placaFinal });
+      const dadosI9 = await consultarBoletoI9({
+        tipo,
+        cpf: cpfFinal,
+        cnpj: cnpjFinal,
+        placa: placaFinal,
+      });
       const resultadoI9 = adaptarResultadoI9(dadosI9);
-      if (temResultadoI9(resultadoI9)) return res.json({ sistema: "i9", ...resultadoI9 });
+      if (temResultadoI9(resultadoI9))
+        return res.json({ sistema: "i9", ...resultadoI9 });
     } catch (erroI9) {
       console.warn("I9 falhou:", extrairErro(erroI9));
     }
 
-    const dadosSouth = await southSegundaViaBoletos({ placa: placaFinal, documento: docFinal });
+    const dadosSouth = await southSegundaViaBoletos({
+      placa: placaFinal,
+      documento: docFinal,
+    });
 
-    if (temResultadoSouth(dadosSouth)) return res.json({ sistema: "south", ...dadosSouth });
+    if (temResultadoSouth(dadosSouth))
+      return res.json({ sistema: "south", ...dadosSouth });
 
     return res.status(404).json({
       status: "erro",
@@ -855,8 +959,14 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
   try {
     const [
       niver,
-      southList5, southList2, southListHoje, southListAtraso,
-      i9List5,    i9List2,    i9ListHoje,    i9ListAtraso,
+      southList5,
+      southList2,
+      southListHoje,
+      southListAtraso,
+      i9List5,
+      i9List2,
+      i9ListHoje,
+      i9ListAtraso,
     ] = await Promise.all([
       southBuscarAniversariantes(),
       // South
@@ -873,8 +983,14 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
 
     const todas = [
       ...niver,
-      ...southList5, ...southList2, ...southListHoje, ...southListAtraso,
-      ...i9List5,    ...i9List2,    ...i9ListHoje,    ...i9ListAtraso,
+      ...southList5,
+      ...southList2,
+      ...southListHoje,
+      ...southListAtraso,
+      ...i9List5,
+      ...i9List2,
+      ...i9ListHoje,
+      ...i9ListAtraso,
     ];
 
     const validas = todas.filter((item) => item.telefone);
@@ -911,7 +1027,9 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
     });
   } catch (erro) {
     console.error("Erro em /notificacoes-pendentes:", erro.message);
-    return res.status(500).json({ erro: "Erro ao consolidar notificações diárias" });
+    return res
+      .status(500)
+      .json({ erro: "Erro ao consolidar notificações diárias" });
   }
 });
 
@@ -936,14 +1054,84 @@ app.get("/teste-vencimentos-i9", protegerRotaInterna, async (req, res) => {
   const dados = await i9BuscarVencimentos(data, tipo);
   res.json({ total: dados.length, data, sistema: "i9", dados });
 });
+app.post("/teste-template", protegerRotaInterna, async (req, res) => {
+  try {
+    const { telefone, template, parametros = [] } = req.body;
 
+    if (!telefone || !template) {
+      return res.status(400).json({
+        ok: false,
+        erro: "Informe telefone e template",
+      });
+    }
+
+    const numero = normalizarTelefoneBR(telefone);
+    const resultado = await enviarTemplate(numero, template, parametros);
+
+    return res.json({
+      ok: true,
+      telefone: numero,
+      template,
+      resultado,
+    });
+  } catch (erro) {
+    return res.status(500).json({
+      ok: false,
+      erro: erro.response?.data || erro.message,
+    });
+  }
+});
 app.listen(PORT, () => {
   console.log(`✅ API rodando na porta ${PORT}`);
 });
 
+async function enviarTemplate(to, templateName, parametros = []) {
+  try {
+    const components = [];
+
+    if (parametros.length > 0) {
+      components.push({
+        type: "body",
+        parameters: parametros.map((p) => ({
+          type: "text",
+          text: String(p || ""),
+        })),
+      });
+    }
+
+    const response = await axios.post(
+      `https://graph.facebook.com/v25.0/${WA_PHONE_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "template",
+        template: {
+          name: templateName,
+          language: { code: "pt_BR" },
+          components,
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${WA_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+
+    console.log(
+      `✅ TEMPLATE ENVIADO (${templateName}) para ${to}:`,
+      JSON.stringify(response.data, null, 2),
+    );
+    return response.data;
+  } catch (erro) {
+    console.error("❌ ERRO TEMPLATE:", erro.response?.data || erro.message);
+  }
+}
 module.exports = {
   app,
   enviarTexto,
   enviarImagem,
+  enviarTemplate,
   normalizarTelefoneBR,
 };

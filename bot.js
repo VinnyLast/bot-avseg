@@ -2,10 +2,18 @@ require("dotenv").config();
 
 const axios = require("axios");
 const cron = require("node-cron");
+const TEMPLATE_MAP = {
+  lembrete_5: "lembrete_5_dias",
+  lembrete_2: "lembrete_2_dias",
+  cobranca_4: "aviso_pendencia_4_dias",
+  cobranca_15: "aviso_pendencia_15_dias",
+  aniversario: "aniversario_cliente",
+};
 const {
   app,
   enviarTexto,
   enviarImagem,
+  enviarTemplate,
   normalizarTelefoneBR,
 } = require("./api");
 
@@ -1005,10 +1013,23 @@ if (ENABLE_CRON) {
           continue;
         }
 
-        const mensagem = montarMensagemNotificacao(item);
-        if (!mensagem) continue;
+        const templateName = TEMPLATE_MAP[item.tipo];
 
-        await enviarTextoCanal(telefone, mensagem, { origem: "meta" });
+        if (templateName) {
+          let parametros = [];
+
+          if (item.tipo === "aniversario") {
+            parametros = [item.nome || "Associado"];
+          } else {
+            parametros = [
+              item.nome || "Associado",
+              item.placa || "ND",
+              formatarDataBR(item.vencimento),
+            ];
+          }
+
+          await enviarTemplate(telefone, templateName, parametros);
+        }
 
         if (item.url && item.url !== "ND" && item.tipo !== "aniversario") {
           await delay(500);
