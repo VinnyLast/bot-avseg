@@ -474,18 +474,18 @@ async function enviarMensagemClienteChatwoot(conversationId, texto) {
     const url = `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/messages`;
 
     const response = await axios.post(
-  url,
-  {
-    content: texto,
-    message_type: "incoming",
-    private: false,
-    source_id: `wa_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-  },
-  {
-    headers: montarHeadersChatwoot(),
-    timeout: 15000,
-  }
-);
+      url,
+      {
+        content: texto,
+        message_type: "incoming",
+        private: false,
+        source_id: `wa_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      },
+      {
+        headers: montarHeadersChatwoot(),
+        timeout: 15000,
+      },
+    );
 
     console.log(
       `✅ Mensagem do cliente enviada ao Chatwoot conv=${conversationId}:`,
@@ -908,14 +908,14 @@ async function processarMensagem({
   const http = axiosInterno();
   const contexto = { origem, conversationId };
 
-  // 0. Modo humano — bot silencioso até o cliente pedir menu/bot
+  // 0. Modo humano — bot silencioso até o cliente pedir menu
   // 0. Modo humano — bot silencioso, mas encaminha mensagens para o Chatwoot
   if (modoHumano.has(from)) {
     const canal = obterUltimoCanal(from);
     let convId = conversationId || canal?.conversationId;
 
     // Cliente pediu para voltar ao bot
-    if (["menu", "bot", "oi", "olá", "ola"].includes(texto)) {
+    if (texto.trim().toLowerCase() === "menu") {
       modoHumano.delete(from);
       estadoUsuario[from] = null;
 
