@@ -2,13 +2,17 @@ require("dotenv").config();
 
 const axios = require("axios");
 const cron = require("node-cron");
+const fs = require("fs");
+const path = require("path");
+
 const TEMPLATE_MAP = {
   lembrete_5: "lembrete_5_dias",
-  lembrete_2: "lembrete_2_dias",
+  lembrete_2: "lembrete_2_dia",
   cobranca_4: "aviso_pendencia_4_dias",
   cobranca_15: "aviso_pendencia_15_dias",
   aniversario: "aniversario_cliente",
 };
+
 const {
   app,
   enviarTexto,
@@ -31,6 +35,24 @@ const IMAGEM_BOAS_VINDAS =
 const TEST_MODE = process.env.TEST_MODE === "true";
 const ENABLE_CRON = process.env.ENABLE_CRON === "true";
 
+const MAX_TEMPLATES_POR_CLIENTE_DIA = Number(
+  process.env.MAX_TEMPLATES_POR_CLIENTE_DIA || 1
+);
+
+const MAX_TEMPLATES_POR_HORA = Number(
+  process.env.MAX_TEMPLATES_POR_HORA || 50
+);
+
+const DELAY_TEMPLATE_MIN_MS = Number(
+  process.env.DELAY_TEMPLATE_MIN_MS || 8000
+);
+
+const DELAY_TEMPLATE_MAX_MS = Number(
+  process.env.DELAY_TEMPLATE_MAX_MS || 20000
+);
+
+const ARQUIVO_ENVIOS = path.join(__dirname, "envios_templates.json");
+const ARQUIVO_OPTOUT = path.join(__dirname, "usuarios_optout.json");
 const ALLOWED_NUMBERS = new Set(
   String(process.env.ALLOWED_NUMBERS || "")
     .split(",")
@@ -61,8 +83,8 @@ const TELEFONE_ASSISTENCIA = "0800 130-0078";
 // =============================================================================
 const estadoUsuario = {};
 const modoHumano = new Set();
-const usuariosOptOut = new Set();
-const avaliacoes = [];
+const usuariosOptOut = carregarOptOut();
+const avaliacoes = [];  
 const ultimoCanalPorNumero = Object.create(null);
 
 // =============================================================================
@@ -70,6 +92,167 @@ const ultimoCanalPorNumero = Object.create(null);
 // =============================================================================
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+function carregarJson(caminho, padrao) {
+  try {
+    if (!fs.existsSync(caminho)) return padrao;
+
+    const conteudo = fs.readFileSync(caminho, "utf8");
+    if (!conteudo.trim()) return padrao;
+
+    return JSON.parse(conteudo);
+  } catch (erro) {
+    console.error(`❌ Erro ao carregar ${path.basename(caminho)}:`, erro.message);
+    return padrao;
+  }
+}
+
+function salvarJson(caminho, dados) {
+  try {
+    fs.writeFileSync(caminho, JSON.stringify(dados, null, 2));
+  } catch (erro) {
+    console.error(`❌ Erro ao salvar ${path.basename(caminho)}:`, erro.message);
+  }
+}
+
+function carregarOptOut() {
+  const dados = carregarJson(ARQUIVO_OPTOUT, []);
+  return new Set(Array.isArray(dados) ? dados : []);
+}
+
+function salvarOptOut() {
+  salvarJson(ARQUIVO_OPTOUT, [...usuariosOptOut]);
+}
+
+function montarParametrosTemplate(item) {
+  if (item.tipo === "aniversario") {
+    return [item.nome || "Associado"];
+  }
+
+  return [
+    item.nome || "Associado",
+    item.placa || "ND",
+    formatarDataBR(item.vencimento),
+  ];
+}
+function delayAleatorioTemplate() {
+  const min = DELAY_TEMPLATE_MIN_MS;
+  const max = DELAY_TEMPLATE_MAX_MS;
+
+  if (max <= min) return min;
+
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function carregarEnvios() {
+  try {
+    if (!fs.existsSync(ARQUIVO_ENVIOS)) {
+      return {
+        porDia: {},
+        porHora: {},
+        enviosExatos: {},
+      };
+    }
+
+    const conteudo = fs.readFileSync(ARQUIVO_ENVIOS, "utf8");
+    return JSON.parse(conteudo);
+  } catch (erro) {
+    console.error("❌ Erro ao carregar envios_templates.json:", erro.message);
+    return {
+      porDia: {},
+      porHora: {},
+      enviosExatos: {},
+    };
+  }
+}
+
+function salvarEnvios(dados) {
+  try {
+    fs.writeFileSync(ARQUIVO_ENVIOS, JSON.stringify(dados, null, 2));
+  } catch (erro) {
+    console.error("❌ Erro ao salvar envios_templates.json:", erro.message);
+  }
+}
+
+function chaveDia() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function chaveHora() {
+  return new Date().toISOString().slice(0, 13);
+}
+
+function montarChaveExataEnvio(item, telefone, templateName) {
+  const placa = item.placa || "ND";
+  const vencimento = formatarDataBR(item.vencimento || "ND");
+
+  return [
+    telefone,
+    templateName,
+    item.tipo || "sem_tipo",
+    placa,
+    vencimento,
+  ].join("|");
+}
+
+function podeEnviarTemplateSeguro(item, telefone, templateName) {
+  const envios = carregarEnvios();
+
+  const dia = chaveDia();
+  const hora = chaveHora();
+
+  const chaveClienteDia = `${dia}|${telefone}`;
+  const chaveGlobalHora = hora;
+  const chaveExata = montarChaveExataEnvio(item, telefone, templateName);
+
+  const totalClienteDia = envios.porDia[chaveClienteDia] || 0;
+  const totalHora = envios.porHora[chaveGlobalHora] || 0;
+  const jaEnviadoExato = Boolean(envios.enviosExatos[chaveExata]);
+
+  if (jaEnviadoExato) {
+    return {
+      permitido: false,
+      motivo: `duplicado exato: ${chaveExata}`,
+    };
+  }
+
+  if (totalClienteDia >= MAX_TEMPLATES_POR_CLIENTE_DIA) {
+    return {
+      permitido: false,
+      motivo: `limite diário do cliente atingido: ${telefone}`,
+    };
+  }
+
+  if (totalHora >= MAX_TEMPLATES_POR_HORA) {
+    return {
+      permitido: false,
+      motivo: `limite global por hora atingido: ${hora}`,
+    };
+  }
+
+  return {
+    permitido: true,
+    envios,
+    chaveClienteDia,
+    chaveGlobalHora,
+    chaveExata,
+  };
+}
+
+function registrarEnvioTemplate(controle) {
+  const envios = controle.envios || carregarEnvios();
+
+  envios.porDia[controle.chaveClienteDia] =
+    (envios.porDia[controle.chaveClienteDia] || 0) + 1;
+
+  envios.porHora[controle.chaveGlobalHora] =
+    (envios.porHora[controle.chaveGlobalHora] || 0) + 1;
+
+  envios.enviosExatos[controle.chaveExata] = {
+    enviadoEm: new Date().toISOString(),
+  };
+
+  salvarEnvios(envios);
 }
 
 function limparNumeros(texto) {
@@ -760,9 +943,10 @@ async function processarMensagem({
   }
 
   // 2. Opt-out / opt-in
-  if (texto === "0" || texto === "parar") {
-    usuariosOptOut.add(from);
-    estadoUsuario[from] = null;
+if (texto === "0" || texto === "parar") {
+  usuariosOptOut.add(normalizarTelefoneBR(from));
+  salvarOptOut();
+  estadoUsuario[from] = null;
     await enviarTextoCanal(
       from,
       `✅ *Notificações preventivas desativadas.*\n\nVocê não receberá mais os lembretes de 5 e 2 dias antes do vencimento.\n\nSe quiser voltar a receber, digite *voltar*.`,
@@ -771,9 +955,10 @@ async function processarMensagem({
     return;
   }
 
-  if (texto === "voltar") {
-    usuariosOptOut.delete(from);
-    estadoUsuario[from] = null;
+if (texto === "voltar") {
+  usuariosOptOut.delete(normalizarTelefoneBR(from));
+  salvarOptOut();
+  estadoUsuario[from] = null;
     await enviarTextoCanal(
       from,
       `✅ *Notificações ativadas novamente!*\n\nVocê voltará a receber nossos lembretes preventivos. Obrigado!`,
@@ -783,7 +968,7 @@ async function processarMensagem({
   }
 
   // 3. Menu
-  if (["oi", "olá", "ola", "menu", "inicio", "início"].includes(texto)) {
+  if (["oi", "olá", "ola", "menu", "inicio", "início",].includes(texto)) {
     estadoUsuario[from] = null;
     let cliente = null;
     try {
@@ -1000,10 +1185,12 @@ if (ENABLE_CRON) {
         const telefone = normalizarTelefoneBR(item?.telefone || "");
         if (!telefone) continue;
 
-        if (
-          usuariosOptOut.has(telefone) &&
-          (item.tipo === "lembrete_5" || item.tipo === "lembrete_2")
-        ) {
+        if (!podeEnviar(telefone)) {
+          console.log(`🧪 TEST_MODE ativo: template bloqueado para ${telefone}`);
+          continue;
+        }
+
+        if (usuariosOptOut.has(telefone)) {
           console.log(`⏭️ Opt-out: ${telefone} ignorado (${item.tipo})`);
           continue;
         }
@@ -1015,39 +1202,46 @@ if (ENABLE_CRON) {
 
         const templateName = TEMPLATE_MAP[item.tipo];
 
-        if (templateName) {
-          let parametros = [];
-
-          if (item.tipo === "aniversario") {
-            parametros = [item.nome || "Associado"];
-          } else {
-            parametros = [
-              item.nome || "Associado",
-              item.placa || "ND",
-              formatarDataBR(item.vencimento),
-            ];
-          }
-
-          await enviarTemplate(telefone, templateName, parametros);
+        if (!templateName) {
+          console.log(`⏭️ Tipo sem template configurado: ${item.tipo}`);
+          continue;
         }
 
-        if (item.url && item.url !== "ND" && item.tipo !== "aniversario") {
-          await delay(500);
-          await enviarTextoCanal(
-            telefone,
-            `🔗 *Acesse sua participação mensal:*\n${item.url}`,
-            { origem: "meta" },
+        const parametros = montarParametrosTemplate(item);
+
+        const controleEnvio = podeEnviarTemplateSeguro(
+          item,
+          telefone,
+          templateName
+        );
+
+        if (!controleEnvio.permitido) {
+          console.log(`⏭️ Template bloqueado: ${controleEnvio.motivo}`);
+          continue;
+        }
+
+        try {
+          await enviarTemplate(telefone, templateName, parametros);
+          registrarEnvioTemplate(controleEnvio);
+
+          const espera = delayAleatorioTemplate();
+          console.log(
+            `⏳ Aguardando ${Math.round(espera / 1000)}s antes do próximo envio...`
+          );
+          await delay(espera);
+        } catch (erro) {
+          console.error(
+            `❌ Erro ao enviar template ${templateName} para ${telefone}:`,
+            erro.response?.data || erro.message
           );
         }
-
-        await delay(DELAY_ENVIO_MS);
       }
 
       console.log("✅ Rotina de notificações concluída.");
     } catch (erro) {
       console.error(
         "❌ Erro na rotina de notificações:",
-        erro.response?.data || erro.message,
+        erro.response?.data || erro.message
       );
     }
   });

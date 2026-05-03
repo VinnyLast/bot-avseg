@@ -1,2 +1,4 @@
 node_modules/
 .env
+envios_templates.json
+usuarios_optout.json
