@@ -186,13 +186,9 @@ app.post("/chatwoot-bot", async (req, res) => {
     console.log("📩 WEBHOOK CHATWOOT:");
     console.log(JSON.stringify(body, null, 2));
 
-    // Ignora notas privadas
-    if (body.private === true) {
-      return res.status(200).json({ ok: true, ignored: "private_note" });
-    }
-
-    const content = body.content || body.message?.content || "";
+    const event = body.event;
     const messageType = body.message_type || body.message?.message_type;
+    const content = body.content || body.message?.content || "";
 
     const conversation = body.conversation || body.message?.conversation || {};
     const contact =
@@ -202,10 +198,34 @@ app.post("/chatwoot-bot", async (req, res) => {
       body.conversation?.contact ||
       {};
 
+    const senderType =
+      body.sender?.type || body.message?.sender?.type || body.sender_type || "";
+
+    // Ignora notas privadas
+    if (body.private === true || body.message?.private === true) {
+      return res.status(200).json({
+        ok: true,
+        ignored: "private_note",
+      });
+    }
+
+    // Evita loop:
+    // mensagens incoming no Chatwoot são apenas o espelho do que já veio pela Meta.
+    // Se processar incoming aqui, ele manda de volta para o bot e cria repetição.
+    if (messageType === "incoming") {
+      return res.status(200).json({
+        ok: true,
+        ignored: "incoming_chatwoot_ignored_to_prevent_loop",
+        event,
+        senderType,
+      });
+    }
+
     const phoneRaw =
       contact.phone_number ||
       contact.phone ||
       conversation.meta?.sender?.phone_number ||
+      body.conversation?.meta?.sender?.phone_number ||
       "";
 
     const telefone = normalizarTelefoneBR(phoneRaw);
@@ -227,25 +247,20 @@ app.post("/chatwoot-bot", async (req, res) => {
       });
     }
 
-    // Mensagem incoming do Chatwoot -> manda para o bot processar
-    if (messageType === "incoming") {
-      app.emit("chatwoot_message", {
-        from: telefone,
-        bodyText: content,
-        conversationId: conversation.id || body.conversation_id,
-        raw: body,
-      });
-
-      return res.status(200).json({ ok: true });
-    }
-
     return res.status(200).json({
       ok: true,
       ignored: `message_type ${messageType}`,
     });
   } catch (erro) {
-    console.error("❌ Erro no webhook Chatwoot:", erro.response?.data || erro.message);
-    return res.status(500).json({ ok: false, erro: erro.message });
+    console.error(
+      "❌ Erro no webhook Chatwoot:",
+      erro.response?.data || erro.message,
+    );
+
+    return res.status(500).json({
+      ok: false,
+      erro: erro.message,
+    });
   }
 });
 
@@ -948,52 +963,64 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
     });
   }
 });
-
 // =============================================================================
 // ROTA /notificacoes-pendentes  (South + I9)
+// Fluxo:
+// - Lembrete 5 dias antes
+// - Lembrete 2 dias antes
+// - Cobrança 4 dias depois
+// - Cobrança 15 dias depois
+// - Parabéns no dia
 // =============================================================================
 app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
   const hoje = dayjs();
+
   const d5 = hoje.add(5, "day").format("YYYY-MM-DD");
   const d2 = hoje.add(2, "day").format("YYYY-MM-DD");
-  const d0 = hoje.format("YYYY-MM-DD");
-  const atrasado = hoje.subtract(2, "day").format("YYYY-MM-DD"); // 2 dias de atraso
+  const atraso4 = hoje.subtract(4, "day").format("YYYY-MM-DD");
+  const atraso15 = hoje.subtract(15, "day").format("YYYY-MM-DD");
 
   try {
     const [
       niver,
+
       southList5,
       southList2,
-      southListHoje,
-      southListAtraso,
+      southListAtraso4,
+      southListAtraso15,
+
       i9List5,
       i9List2,
-      i9ListHoje,
-      i9ListAtraso,
+      i9ListAtraso4,
+      i9ListAtraso15,
     ] = await Promise.all([
       southBuscarAniversariantes(),
+
       // South
       southBuscarVencimentos(d5, "lembrete_5"),
       southBuscarVencimentos(d2, "lembrete_2"),
-      southBuscarVencimentos(d0, "vencimento_hoje"),
-      southBuscarVencimentos(atrasado, "cobranca_atraso"),
-      // I9 (cruza placas do South)
+      southBuscarVencimentos(atraso4, "cobranca_4"),
+      southBuscarVencimentos(atraso15, "cobranca_15"),
+
+      // I9
       i9BuscarVencimentos(d5, "lembrete_5"),
       i9BuscarVencimentos(d2, "lembrete_2"),
-      i9BuscarVencimentos(d0, "vencimento_hoje"),
-      i9BuscarVencimentos(atrasado, "cobranca_atraso"),
+      i9BuscarVencimentos(atraso4, "cobranca_4"),
+      i9BuscarVencimentos(atraso15, "cobranca_15"),
     ]);
 
     const todas = [
       ...niver,
+
       ...southList5,
       ...southList2,
-      ...southListHoje,
-      ...southListAtraso,
+      ...southListAtraso4,
+      ...southListAtraso15,
+
       ...i9List5,
       ...i9List2,
-      ...i9ListHoje,
-      ...i9ListAtraso,
+      ...i9ListAtraso4,
+      ...i9ListAtraso15,
     ];
 
     const validas = todas.filter((item) => item.telefone);
@@ -1001,8 +1028,8 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
     const chaves = new Set();
 
     for (const item of validas) {
-      // Chave inclui o sistema para não suprimir entradas legítimas de ambos
       const chave = `${item.tipo}-${item.telefone}-${item.placa || ""}-${item.vencimento || ""}`;
+
       if (!chaves.has(chave)) {
         chaves.add(chave);
         unicas.push(item);
@@ -1011,28 +1038,36 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
 
     return res.json({
       total: unicas.length,
+      datas: {
+        hoje: hoje.format("YYYY-MM-DD"),
+        lembrete_5: d5,
+        lembrete_2: d2,
+        cobranca_4: atraso4,
+        cobranca_15: atraso15,
+      },
       resumo: {
         aniversarios: niver.length,
         south: {
           lembrete_5: southList5.length,
           lembrete_2: southList2.length,
-          vencimento_hoje: southListHoje.length,
-          cobranca_atraso: southListAtraso.length,
+          cobranca_4: southListAtraso4.length,
+          cobranca_15: southListAtraso15.length,
         },
         i9: {
           lembrete_5: i9List5.length,
           lembrete_2: i9List2.length,
-          vencimento_hoje: i9ListHoje.length,
-          cobranca_atraso: i9ListAtraso.length,
+          cobranca_4: i9ListAtraso4.length,
+          cobranca_15: i9ListAtraso15.length,
         },
       },
       notificacoes: unicas,
     });
   } catch (erro) {
     console.error("Erro em /notificacoes-pendentes:", erro.message);
-    return res
-      .status(500)
-      .json({ erro: "Erro ao consolidar notificações diárias" });
+
+    return res.status(500).json({
+      erro: "Erro ao consolidar notificações diárias",
+    });
   }
 });
 
