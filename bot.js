@@ -474,17 +474,18 @@ async function enviarMensagemClienteChatwoot(conversationId, texto) {
     const url = `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/messages`;
 
     const response = await axios.post(
-      url,
-      {
-        content: texto,
-        message_type: "incoming",
-        private: false,
-      },
-      {
-        headers: montarHeadersChatwoot(),
-        timeout: 15000,
-      },
-    );
+  url,
+  {
+    content: texto,
+    message_type: "incoming",
+    private: false,
+    source_id: `wa_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+  },
+  {
+    headers: montarHeadersChatwoot(),
+    timeout: 15000,
+  }
+);
 
     console.log(
       `✅ Mensagem do cliente enviada ao Chatwoot conv=${conversationId}:`,
