@@ -181,68 +181,71 @@ app.post("/webhook", (req, res) => {
 });
 app.post("/chatwoot-bot", async (req, res) => {
   try {
-    console.log("CHATWOOT BOT RECEBIDO");
-    console.log(JSON.stringify(req.body, null, 2));
+    const body = req.body;
 
-    const body = req.body || {};
+    console.log("📩 WEBHOOK CHATWOOT:");
+    console.log(JSON.stringify(body, null, 2));
 
-    // Processa somente mensagens recebidas do cliente
-    if (body.message_type !== "incoming") {
-      console.log("⏭️ Ignorado: message_type diferente de incoming");
-      return res.status(200).json({ message: "ok" });
-    }
-
-    // Ignora mensagens privadas/notas internas
+    // Ignora notas privadas
     if (body.private === true) {
-      console.log("⏭️ Ignorado: mensagem privada");
-      return res.status(200).json({ message: "ok" });
+      return res.status(200).json({ ok: true, ignored: "private_note" });
     }
 
-    // Ignora mensagens enviadas por agente/bot/sistema
-    const senderType = String(body?.sender?.type || "").toLowerCase();
-    if (senderType && senderType !== "contact") {
-      console.log(`⏭️ Ignorado: sender.type=${senderType}`);
-      return res.status(200).json({ message: "ok" });
-    }
+    const content = body.content || body.message?.content || "";
+    const messageType = body.message_type || body.message?.message_type;
 
-    // Alguns eventos podem vir sem conteúdo útil
-    const mensagem = String(
-      body?.content || body?.message?.content || "",
-    ).trim();
+    const conversation = body.conversation || body.message?.conversation || {};
+    const contact =
+      body.contact ||
+      body.sender ||
+      conversation.contact ||
+      body.conversation?.contact ||
+      {};
 
-    const contato =
-      body?.conversation?.meta?.sender?.phone_number ||
-      body?.sender?.phone_number ||
-      body?.contact?.phone_number ||
+    const phoneRaw =
+      contact.phone_number ||
+      contact.phone ||
+      conversation.meta?.sender?.phone_number ||
       "";
 
-    const from = normalizarTelefoneBR(contato);
+    const telefone = normalizarTelefoneBR(phoneRaw);
 
-    const conversationId =
-      body?.conversation?.id || body?.conversation_id || null;
-
-    // ID da mensagem do Chatwoot, útil para evitar duplicidade no bot.js se quiser
-    const messageId = body?.id || body?.message?.id || null;
-
-    if (!from || !mensagem) {
-      console.log("⏭️ Ignorado: sem telefone ou sem mensagem");
-      return res.status(200).json({ message: "ok" });
+    if (!telefone || !content) {
+      return res.status(200).json({
+        ok: true,
+        ignored: "sem telefone ou conteúdo",
+      });
     }
 
-    app.emit("chatwoot_message", {
-      from,
-      bodyText: mensagem,
-      conversationId,
-      messageId,
-      raw: body,
-    });
+    // Mensagem do atendente no Chatwoot -> envia para WhatsApp
+    if (messageType === "outgoing") {
+      await enviarTexto(telefone, content);
+
+      return res.status(200).json({
+        ok: true,
+        sent_to_whatsapp: telefone,
+      });
+    }
+
+    // Mensagem incoming do Chatwoot -> manda para o bot processar
+    if (messageType === "incoming") {
+      app.emit("chatwoot_message", {
+        from: telefone,
+        bodyText: content,
+        conversationId: conversation.id || body.conversation_id,
+        raw: body,
+      });
+
+      return res.status(200).json({ ok: true });
+    }
 
     return res.status(200).json({
-      responses: [],
+      ok: true,
+      ignored: `message_type ${messageType}`,
     });
   } catch (erro) {
-    console.error("Erro /chatwoot-bot:", erro.message);
-    return res.status(200).json({ responses: [] });
+    console.error("❌ Erro no webhook Chatwoot:", erro.response?.data || erro.message);
+    return res.status(500).json({ ok: false, erro: erro.message });
   }
 });
 
@@ -999,7 +1002,7 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
 
     for (const item of validas) {
       // Chave inclui o sistema para não suprimir entradas legítimas de ambos
-      const chave = `${item.tipo}-${item.sistema || "geral"}-${item.telefone}-${item.placa || ""}`;
+      const chave = `${item.tipo}-${item.telefone}-${item.placa || ""}-${item.vencimento || ""}`;
       if (!chaves.has(chave)) {
         chaves.add(chave);
         unicas.push(item);

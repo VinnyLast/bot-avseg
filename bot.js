@@ -68,6 +68,7 @@ const CHATWOOT_BASE_URL = String(process.env.CHATWOOT_BASE_URL || "").replace(
 );
 const CHATWOOT_API_TOKEN = process.env.CHATWOOT_API_TOKEN || "";
 const CHATWOOT_ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID || "";
+const CHATWOOT_INBOX_ID = process.env.CHATWOOT_INBOX_ID || "";
 
 // Links
 const LINK_COTACAO = process.env.LINK_COTACAO || "";
@@ -408,25 +409,31 @@ async function criarConversaChatwoot(telefone, nome = "Associado") {
     if (!contactId) return null;
 
     // Busca o inbox WhatsApp
-    const inboxes = await axios.get(
-      `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/inboxes`,
-      { headers: montarHeadersChatwoot(), timeout: 10000 },
-    );
+    let inboxId = CHATWOOT_INBOX_ID;
 
-    const inbox = inboxes.data?.payload?.find((i) =>
-      String(i.channel_type || "")
-        .toLowerCase()
-        .includes("whatsapp"),
-    );
+if (!inboxId) {
+  const inboxes = await axios.get(
+    `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/inboxes`,
+    { headers: montarHeadersChatwoot(), timeout: 10000 },
+  );
 
-    if (!inbox) {
-      console.error("❌ Inbox WhatsApp não encontrado no Chatwoot");
-      return null;
-    }
+  const inbox = inboxes.data?.payload?.find((i) =>
+    String(i.channel_type || "")
+      .toLowerCase()
+      .includes("api"),
+  );
+
+  if (!inbox) {
+    console.error("❌ Inbox API não encontrada no Chatwoot. Configure CHATWOOT_INBOX_ID no .env");
+    return null;
+  }
+
+  inboxId = inbox.id;
+}
 
     const conversa = await axios.post(
       `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations`,
-      { inbox_id: inbox.id, contact_id: contactId, status: "open" },
+      { inbox_id: Number(inboxId), contact_id: contactId, status: "open" },
       { headers: montarHeadersChatwoot(), timeout: 10000 },
     );
 
