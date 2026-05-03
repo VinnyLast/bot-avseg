@@ -36,19 +36,15 @@ const TEST_MODE = process.env.TEST_MODE === "true";
 const ENABLE_CRON = process.env.ENABLE_CRON === "true";
 
 const MAX_TEMPLATES_POR_CLIENTE_DIA = Number(
-  process.env.MAX_TEMPLATES_POR_CLIENTE_DIA || 1
+  process.env.MAX_TEMPLATES_POR_CLIENTE_DIA || 1,
 );
 
-const MAX_TEMPLATES_POR_HORA = Number(
-  process.env.MAX_TEMPLATES_POR_HORA || 50
-);
+const MAX_TEMPLATES_POR_HORA = Number(process.env.MAX_TEMPLATES_POR_HORA || 50);
 
-const DELAY_TEMPLATE_MIN_MS = Number(
-  process.env.DELAY_TEMPLATE_MIN_MS || 8000
-);
+const DELAY_TEMPLATE_MIN_MS = Number(process.env.DELAY_TEMPLATE_MIN_MS || 8000);
 
 const DELAY_TEMPLATE_MAX_MS = Number(
-  process.env.DELAY_TEMPLATE_MAX_MS || 20000
+  process.env.DELAY_TEMPLATE_MAX_MS || 20000,
 );
 
 const ARQUIVO_ENVIOS = path.join(__dirname, "envios_templates.json");
@@ -85,7 +81,7 @@ const TELEFONE_ASSISTENCIA = "0800 130-0078";
 const estadoUsuario = {};
 const modoHumano = new Set();
 const usuariosOptOut = carregarOptOut();
-const avaliacoes = [];  
+const avaliacoes = [];
 const ultimoCanalPorNumero = Object.create(null);
 
 // =============================================================================
@@ -103,7 +99,10 @@ function carregarJson(caminho, padrao) {
 
     return JSON.parse(conteudo);
   } catch (erro) {
-    console.error(`❌ Erro ao carregar ${path.basename(caminho)}:`, erro.message);
+    console.error(
+      `❌ Erro ao carregar ${path.basename(caminho)}:`,
+      erro.message,
+    );
     return padrao;
   }
 }
@@ -411,25 +410,27 @@ async function criarConversaChatwoot(telefone, nome = "Associado") {
     // Busca o inbox WhatsApp
     let inboxId = CHATWOOT_INBOX_ID;
 
-if (!inboxId) {
-  const inboxes = await axios.get(
-    `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/inboxes`,
-    { headers: montarHeadersChatwoot(), timeout: 10000 },
-  );
+    if (!inboxId) {
+      const inboxes = await axios.get(
+        `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/inboxes`,
+        { headers: montarHeadersChatwoot(), timeout: 10000 },
+      );
 
-  const inbox = inboxes.data?.payload?.find((i) =>
-    String(i.channel_type || "")
-      .toLowerCase()
-      .includes("api"),
-  );
+      const inbox = inboxes.data?.payload?.find((i) =>
+        String(i.channel_type || "")
+          .toLowerCase()
+          .includes("api"),
+      );
 
-  if (!inbox) {
-    console.error("❌ Inbox API não encontrada no Chatwoot. Configure CHATWOOT_INBOX_ID no .env");
-    return null;
-  }
+      if (!inbox) {
+        console.error(
+          "❌ Inbox API não encontrada no Chatwoot. Configure CHATWOOT_INBOX_ID no .env",
+        );
+        return null;
+      }
 
-  inboxId = inbox.id;
-}
+      inboxId = inbox.id;
+    }
 
     const conversa = await axios.post(
       `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations`,
@@ -465,6 +466,38 @@ async function enviarTextoChatwoot(conversationId, texto, isPrivate = false) {
     response.data?.id || "ok",
   );
   return response.data;
+}
+async function enviarMensagemClienteChatwoot(conversationId, texto) {
+  if (!temChatwootConfigurado() || !conversationId || !texto) return;
+
+  try {
+    const url = `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/messages`;
+
+    const response = await axios.post(
+      url,
+      {
+        content: texto,
+        message_type: "incoming",
+        private: false,
+      },
+      {
+        headers: montarHeadersChatwoot(),
+        timeout: 15000,
+      },
+    );
+
+    console.log(
+      `✅ Mensagem do cliente enviada ao Chatwoot conv=${conversationId}:`,
+      response.data?.id || "ok",
+    );
+
+    return response.data;
+  } catch (erro) {
+    console.error(
+      "❌ Erro ao enviar mensagem do cliente para Chatwoot:",
+      erro.response?.data || erro.message,
+    );
+  }
 }
 
 async function abrirConversaHumanaChatwoot(conversationId) {
@@ -875,13 +908,16 @@ async function processarMensagem({
   const contexto = { origem, conversationId };
 
   // 0. Modo humano — bot silencioso até o cliente pedir menu/bot
+  // 0. Modo humano — bot silencioso, mas encaminha mensagens para o Chatwoot
   if (modoHumano.has(from)) {
+    const canal = obterUltimoCanal(from);
+    let convId = conversationId || canal?.conversationId;
+
+    // Cliente pediu para voltar ao bot
     if (["menu", "bot", "oi", "olá", "ola"].includes(texto)) {
       modoHumano.delete(from);
       estadoUsuario[from] = null;
 
-      const canal = obterUltimoCanal(from);
-      const convId = conversationId || canal?.conversationId;
       if (convId) await marcarConversaResolvidaChatwoot(convId);
 
       let cliente = null;
@@ -893,7 +929,34 @@ async function processarMensagem({
       } catch (_) {}
 
       await enviarMenu(from, cliente, contexto);
+      return;
     }
+
+    // Cliente mandou mensagem enquanto está em atendimento humano
+    if (temChatwootConfigurado()) {
+      try {
+        if (!convId) {
+          convId = await criarConversaChatwoot(from, "Associado");
+
+          if (convId) {
+            atualizarUltimoCanal(from, {
+              origem: "meta",
+              conversationId: convId,
+            });
+          }
+        }
+
+        if (convId) {
+          await enviarMensagemClienteChatwoot(convId, bodyText);
+        }
+      } catch (erro) {
+        console.error(
+          "❌ Erro ao encaminhar mensagem do cliente para Chatwoot:",
+          erro.response?.data || erro.message,
+        );
+      }
+    }
+
     return;
   }
 
@@ -950,10 +1013,10 @@ async function processarMensagem({
   }
 
   // 2. Opt-out / opt-in
-if (texto === "0" || texto === "parar") {
-  usuariosOptOut.add(normalizarTelefoneBR(from));
-  salvarOptOut();
-  estadoUsuario[from] = null;
+  if (texto === "0" || texto === "parar") {
+    usuariosOptOut.add(normalizarTelefoneBR(from));
+    salvarOptOut();
+    estadoUsuario[from] = null;
     await enviarTextoCanal(
       from,
       `✅ *Notificações preventivas desativadas.*\n\nVocê não receberá mais os lembretes de 5 e 2 dias antes do vencimento.\n\nSe quiser voltar a receber, digite *voltar*.`,
@@ -962,10 +1025,10 @@ if (texto === "0" || texto === "parar") {
     return;
   }
 
-if (texto === "voltar") {
-  usuariosOptOut.delete(normalizarTelefoneBR(from));
-  salvarOptOut();
-  estadoUsuario[from] = null;
+  if (texto === "voltar") {
+    usuariosOptOut.delete(normalizarTelefoneBR(from));
+    salvarOptOut();
+    estadoUsuario[from] = null;
     await enviarTextoCanal(
       from,
       `✅ *Notificações ativadas novamente!*\n\nVocê voltará a receber nossos lembretes preventivos. Obrigado!`,
@@ -975,7 +1038,7 @@ if (texto === "voltar") {
   }
 
   // 3. Menu
-  if (["oi", "olá", "ola", "menu", "inicio", "início",].includes(texto)) {
+  if (["oi", "olá", "ola", "menu", "inicio", "início"].includes(texto)) {
     estadoUsuario[from] = null;
     let cliente = null;
     try {
@@ -1094,6 +1157,10 @@ Fico à disposição em caso de dúvidas!`,
             `🤖 Cliente solicitou atendimento humano via WhatsApp.\nNúmero: +${from}`,
             true, // nota privada
           );
+          await enviarMensagemClienteChatwoot(
+            convId,
+            "Cliente solicitou atendimento humano pelo menu.",
+          );
         }
       } catch (erro) {
         console.error("❌ Erro ao criar conversa no Chatwoot:", erro.message);
@@ -1193,7 +1260,9 @@ if (ENABLE_CRON) {
         if (!telefone) continue;
 
         if (!podeEnviar(telefone)) {
-          console.log(`🧪 TEST_MODE ativo: template bloqueado para ${telefone}`);
+          console.log(
+            `🧪 TEST_MODE ativo: template bloqueado para ${telefone}`,
+          );
           continue;
         }
 
@@ -1219,7 +1288,7 @@ if (ENABLE_CRON) {
         const controleEnvio = podeEnviarTemplateSeguro(
           item,
           telefone,
-          templateName
+          templateName,
         );
 
         if (!controleEnvio.permitido) {
@@ -1233,13 +1302,13 @@ if (ENABLE_CRON) {
 
           const espera = delayAleatorioTemplate();
           console.log(
-            `⏳ Aguardando ${Math.round(espera / 1000)}s antes do próximo envio...`
+            `⏳ Aguardando ${Math.round(espera / 1000)}s antes do próximo envio...`,
           );
           await delay(espera);
         } catch (erro) {
           console.error(
             `❌ Erro ao enviar template ${templateName} para ${telefone}:`,
-            erro.response?.data || erro.message
+            erro.response?.data || erro.message,
           );
         }
       }
@@ -1248,7 +1317,7 @@ if (ENABLE_CRON) {
     } catch (erro) {
       console.error(
         "❌ Erro na rotina de notificações:",
-        erro.response?.data || erro.message
+        erro.response?.data || erro.message,
       );
     }
   });
