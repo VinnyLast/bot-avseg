@@ -1013,30 +1013,39 @@ async function processarMensagem({
     return;
   }
 
-  // 2. Opt-out / opt-in
-  if (texto === "0" || texto === "parar") {
-    usuariosOptOut.add(normalizarTelefoneBR(from));
-    salvarOptOut();
-    estadoUsuario[from] = null;
-    await enviarTextoCanal(
-      from,
-      `✅ *Notificações preventivas desativadas.*\n\nVocê não receberá mais os lembretes de 5 e 2 dias antes do vencimento.\n\nSe quiser voltar a receber, digite *voltar*.`,
-      contexto,
-    );
-    return;
-  }
+// 2. Opt-out / opt-in (melhorado)
+const textoLimpo = texto.trim().toLowerCase();
 
-  if (texto === "voltar") {
-    usuariosOptOut.delete(normalizarTelefoneBR(from));
-    salvarOptOut();
-    estadoUsuario[from] = null;
-    await enviarTextoCanal(
-      from,
-      `✅ *Notificações ativadas novamente!*\n\nVocê voltará a receber nossos lembretes preventivos. Obrigado!`,
-      contexto,
-    );
-    return;
-  }
+if (textoLimpo === "0" || textoLimpo === "parar") {
+  usuariosOptOut.add(normalizarTelefoneBR(from));
+  salvarOptOut();
+  estadoUsuario[from] = null;
+
+  await enviarTextoCanal(
+    from,
+    `🚫 *Notificações desativadas com sucesso.*\n\n` +
+    `Você não receberá mais:\n` +
+    `• Lembretes de vencimento\n` +
+    `• Avisos de pendência\n\n` +
+    `Se quiser voltar a receber, digite *ativar notificações*.`,
+    contexto
+  );
+  return;
+}
+
+if (textoLimpo === "ativar notificações") {
+  usuariosOptOut.delete(normalizarTelefoneBR(from));
+  salvarOptOut();
+  estadoUsuario[from] = null;
+
+  await enviarTextoCanal(
+    from,
+    `✅ *Notificações reativadas com sucesso!*\n\n` +
+    `Você voltará a receber lembretes e avisos normalmente. 📩`,
+    contexto
+  );
+  return;
+}
 
   // 3. Menu
   if (["oi", "olá", "ola", "menu", "inicio", "início"].includes(texto)) {
