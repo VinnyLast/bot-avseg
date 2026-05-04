@@ -823,7 +823,17 @@ async function southSegundaViaBoletos({ placa, documento }) {
         data.FaturasDataOriginal || data.FaturasDataVencimento || "ND",
       valor: data.FaturasValor || data.FaturasValorReal || "ND",
       url: data.UrlBoleto || "ND",
-      linhadigitavel: data.Faturasemv || "ND",
+      linhadigitavel:
+        data.FaturasLinhaDigitavel ||
+        data.Faturasemv ||
+        data.linhadigitavel ||
+        data.LinhaDigitavel ||
+        data.linhaDigitavel ||
+        data.CodigoPix ||
+        data.codigoPix ||
+        data.PixCopiaCola ||
+        data.pixCopiaCola ||
+        "ND",
       nome: data.IndividuosNome || "ND",
       documento: data.IndividuosDocumento || docFinal,
       telefone: normalizarTelefoneBR(
