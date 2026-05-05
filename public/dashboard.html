@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard AVSEG Bot</title>
+  <link rel="stylesheet" href="/dashboard.css" />
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Dashboard AVSEG Bot</h1>
+      <p>Resumo operacional do atendimento automático</p>
+    </header>
+
+    <section class="cards">
+      <div class="card">
+        <span>Consultas hoje</span>
+        <strong id="consultasHoje">0</strong>
+      </div>
+
+      <div class="card">
+        <span>Boletos encontrados</span>
+        <strong id="boletosHoje">0</strong>
+      </div>
+
+      <div class="card">
+        <span>Notificações hoje</span>
+        <strong id="notificacoesHoje">0</strong>
+      </div>
+
+      <div class="card">
+        <span>Opt-outs</span>
+        <strong id="optoutTotal">0</strong>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Últimas consultas</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Telefone</th>
+            <th>Entrada</th>
+            <th>Sistema</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="consultasTabela"></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Últimas notificações</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Telefone</th>
+            <th>Tipo</th>
+            <th>Placa</th>
+            <th>Vencimento</th>
+          </tr>
+        </thead>
+        <tbody id="notificacoesTabela"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/dashboard.js"></script>
+</body>
+</html>
