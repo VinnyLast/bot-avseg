@@ -5,12 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dashboard AVSEG Bot</title>
   <link rel="stylesheet" href="/dashboard.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <main class="container">
-    <header>
-      <h1>Dashboard AVSEG Bot</h1>
-      <p>Resumo operacional do atendimento automático</p>
+    <header class="topbar">
+      <div>
+        <h1>Dashboard AVSEG Bot</h1>
+        <p>Painel operacional do atendimento e notificações</p>
+      </div>
+
+      <div class="topbar-info">
+        <span class="status-dot"></span>
+        <span>Atualização automática a cada 10 segundos</span>
+      </div>
     </header>
 
     <section class="cards">
@@ -33,38 +41,92 @@
         <span>Opt-outs</span>
         <strong id="optoutTotal">0</strong>
       </div>
+
+      <div class="card">
+        <span>Envios registrados</span>
+        <strong id="enviosRegistrados">0</strong>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Notificações por tipo</h2>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="graficoNotificacoes"></canvas>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Resumo rápido</h2>
+        </div>
+
+        <div class="quick-list">
+          <div class="quick-item">
+            <span>Total de consultas carregadas</span>
+            <strong id="totalConsultas">0</strong>
+          </div>
+
+          <div class="quick-item">
+            <span>Total de notificações carregadas</span>
+            <strong id="totalNotificacoes">0</strong>
+          </div>
+
+          <div class="quick-item">
+            <span>Consultas I9</span>
+            <strong id="consultasI9">0</strong>
+          </div>
+
+          <div class="quick-item">
+            <span>Consultas South</span>
+            <strong id="consultasSouth">0</strong>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section class="panel">
-      <h2>Últimas consultas</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Data</th>
-            <th>Telefone</th>
-            <th>Entrada</th>
-            <th>Sistema</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="consultasTabela"></tbody>
-      </table>
+      <div class="panel-header">
+        <h2>Últimas consultas</h2>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Telefone</th>
+              <th>Entrada</th>
+              <th>Sistema</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="consultasTabela"></tbody>
+        </table>
+      </div>
     </section>
 
     <section class="panel">
-      <h2>Últimas notificações</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Data</th>
-            <th>Telefone</th>
-            <th>Tipo</th>
-            <th>Placa</th>
-            <th>Vencimento</th>
-          </tr>
-        </thead>
-        <tbody id="notificacoesTabela"></tbody>
-      </table>
+      <div class="panel-header">
+        <h2>Últimas notificações</h2>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Telefone</th>
+              <th>Tipo</th>
+              <th>Placa</th>
+              <th>Vencimento</th>
+            </tr>
+          </thead>
+          <tbody id="notificacoesTabela"></tbody>
+        </table>
+      </div>
     </section>
   </main>
 
