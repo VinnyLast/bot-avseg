@@ -1228,25 +1228,27 @@ app.get("/dashboard/resumo", protegerRotaInterna, (req, res) => {
   const consultas = carregarJson(ARQUIVO_LOG_CONSULTAS, []);
   const notificacoes = carregarJson(ARQUIVO_LOG_NOTIFICACOES, []);
   const optout = carregarJson(ARQUIVO_OPTOUT, []);
-  const avaliacoes = carregarJson(ARQUIVO_LOG_AVALIACOES, []);
-  const avaliacoesHoje = avaliacoes.filter((a) =>
-    String(a.data || "").startsWith(hoje),
-  );
   const envios = carregarJson(ARQUIVO_ENVIOS, {
     porDia: {},
     porHora: {},
     enviosExatos: {},
   });
+  const avaliacoes = carregarJson(ARQUIVO_LOG_AVALIACOES, []);
 
   const hoje = dayjs().format("YYYY-MM-DD");
 
   const consultasHoje = consultas.filter((c) =>
-    String(c.data || "").startsWith(hoje),
+    String(c.data || "").startsWith(hoje)
   );
 
   const notificacoesHoje = notificacoes.filter((n) =>
-    String(n.data || "").startsWith(hoje),
+    String(n.data || "").startsWith(hoje)
   );
+
+  const avaliacoesHoje = avaliacoes.filter((a) =>
+    String(a.data || "").startsWith(hoje)
+  );
+
   const mediaAvaliacoes =
     avaliacoes.length > 0
       ? avaliacoes.reduce((soma, a) => soma + Number(a.nota || 0), 0) /
@@ -1258,14 +1260,16 @@ app.get("/dashboard/resumo", protegerRotaInterna, (req, res) => {
       ? avaliacoesHoje.reduce((soma, a) => soma + Number(a.nota || 0), 0) /
         avaliacoesHoje.length
       : 0;
+
   res.json({
     consultasHoje: consultasHoje.length,
     boletosEncontradosHoje: consultasHoje.filter(
-      (c) => c.status === "encontrado",
+      (c) => c.status === "encontrado"
     ).length,
     notificacoesHoje: notificacoesHoje.length,
     optoutTotal: Array.isArray(optout) ? optout.length : 0,
     enviosRegistrados: Object.keys(envios.enviosExatos || {}).length,
+
     avaliacoesHoje: avaliacoesHoje.length,
     mediaAvaliacoes: Number(mediaAvaliacoes.toFixed(2)),
     mediaAvaliacoesHoje: Number(mediaAvaliacoesHoje.toFixed(2)),
