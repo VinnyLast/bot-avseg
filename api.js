@@ -8,6 +8,7 @@ const path = require("path");
 
 const ARQUIVO_LOG_CONSULTAS = path.join(__dirname, "logs_consultas.json");
 const ARQUIVO_LOG_NOTIFICACOES = path.join(__dirname, "logs_notificacoes.json");
+const ARQUIVO_LOG_AVALIACOES = path.join(__dirname, "logs_avaliacoes.json");
 const ARQUIVO_OPTOUT = path.join(__dirname, "usuarios_optout.json");
 const ARQUIVO_ENVIOS = path.join(__dirname, "envios_templates.json");
 
@@ -25,7 +26,19 @@ function carregarJson(caminho, padrao) {
 function salvarJson(caminho, dados) {
   fs.writeFileSync(caminho, JSON.stringify(dados, null, 2));
 }
+function registrarLogAvaliacao(item) {
+  try {
+    const logs = carregarJson(ARQUIVO_LOG_AVALIACOES, []);
+    logs.unshift({
+      ...item,
+      data: new Date().toISOString(),
+    });
 
+    salvarJson(ARQUIVO_LOG_AVALIACOES, logs.slice(0, 1000));
+  } catch (erro) {
+    console.error("❌ Erro ao registrar avaliação:", erro.message);
+  }
+}
 function adicionarLog(caminho, item) {
   const logs = carregarJson(caminho, []);
   logs.unshift({
@@ -1215,6 +1228,10 @@ app.get("/dashboard/resumo", protegerRotaInterna, (req, res) => {
   const consultas = carregarJson(ARQUIVO_LOG_CONSULTAS, []);
   const notificacoes = carregarJson(ARQUIVO_LOG_NOTIFICACOES, []);
   const optout = carregarJson(ARQUIVO_OPTOUT, []);
+  const avaliacoes = carregarJson(ARQUIVO_LOG_AVALIACOES, []);
+  const avaliacoesHoje = avaliacoes.filter((a) =>
+    String(a.data || "").startsWith(hoje),
+  );
   const envios = carregarJson(ARQUIVO_ENVIOS, {
     porDia: {},
     porHora: {},
@@ -1230,7 +1247,17 @@ app.get("/dashboard/resumo", protegerRotaInterna, (req, res) => {
   const notificacoesHoje = notificacoes.filter((n) =>
     String(n.data || "").startsWith(hoje),
   );
+  const mediaAvaliacoes =
+    avaliacoes.length > 0
+      ? avaliacoes.reduce((soma, a) => soma + Number(a.nota || 0), 0) /
+        avaliacoes.length
+      : 0;
 
+  const mediaAvaliacoesHoje =
+    avaliacoesHoje.length > 0
+      ? avaliacoesHoje.reduce((soma, a) => soma + Number(a.nota || 0), 0) /
+        avaliacoesHoje.length
+      : 0;
   res.json({
     consultasHoje: consultasHoje.length,
     boletosEncontradosHoje: consultasHoje.filter(
@@ -1239,6 +1266,9 @@ app.get("/dashboard/resumo", protegerRotaInterna, (req, res) => {
     notificacoesHoje: notificacoesHoje.length,
     optoutTotal: Array.isArray(optout) ? optout.length : 0,
     enviosRegistrados: Object.keys(envios.enviosExatos || {}).length,
+    avaliacoesHoje: avaliacoesHoje.length,
+    mediaAvaliacoes: Number(mediaAvaliacoes.toFixed(2)),
+    mediaAvaliacoesHoje: Number(mediaAvaliacoesHoje.toFixed(2)),
   });
 });
 
@@ -1252,6 +1282,9 @@ app.get("/dashboard/notificacoes", protegerRotaInterna, (req, res) => {
 
 app.get("/dashboard/optout", protegerRotaInterna, (req, res) => {
   res.json(carregarJson(ARQUIVO_OPTOUT, []));
+});
+app.get("/dashboard/avaliacoes", protegerRotaInterna, (req, res) => {
+  res.json(carregarJson(ARQUIVO_LOG_AVALIACOES, []).slice(0, 100));
 });
 app.listen(PORT, () => {
   console.log(`✅ API rodando na porta ${PORT}`);

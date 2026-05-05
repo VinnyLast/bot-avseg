@@ -49,6 +49,7 @@ const DELAY_TEMPLATE_MAX_MS = Number(
 
 const ARQUIVO_ENVIOS = path.join(__dirname, "envios_templates.json");
 const ARQUIVO_OPTOUT = path.join(__dirname, "usuarios_optout.json");
+const ARQUIVO_LOG_AVALIACOES = path.join(__dirname, "logs_avaliacoes.json");
 const ALLOWED_NUMBERS = new Set(
   String(process.env.ALLOWED_NUMBERS || "")
     .split(",")
@@ -112,6 +113,20 @@ function salvarJson(caminho, dados) {
     fs.writeFileSync(caminho, JSON.stringify(dados, null, 2));
   } catch (erro) {
     console.error(`❌ Erro ao salvar ${path.basename(caminho)}:`, erro.message);
+  }
+}
+function registrarLogAvaliacao(item) {
+  try {
+    const logs = carregarJson(ARQUIVO_LOG_AVALIACOES, []);
+
+    logs.unshift({
+      ...item,
+      data: new Date().toISOString(),
+    });
+
+    salvarJson(ARQUIVO_LOG_AVALIACOES, logs.slice(0, 1000));
+  } catch (erro) {
+    console.error("❌ Erro ao registrar avaliação:", erro.message);
   }
 }
 
@@ -731,12 +746,18 @@ async function processarAvaliacao(from, texto, contexto = {}) {
   }
 
   const estrelas = "⭐".repeat(nota);
-  avaliacoes.push({
-    telefone: from,
-    nota,
-    data: new Date().toISOString(),
-    origem: contexto.origem || "meta",
-  });
+  registrarLogAvaliacao({
+  telefone: normalizarTelefoneBR(from),
+  nota,
+  origem: contexto.origem || "meta",
+});
+
+avaliacoes.push({
+  telefone: normalizarTelefoneBR(from),
+  nota,
+  data: new Date().toISOString(),
+  origem: contexto.origem || "meta",
+});
   console.log(`📊 Avaliação registrada: ${from} — nota ${nota}/5`);
 
   const mensagemNota = {
