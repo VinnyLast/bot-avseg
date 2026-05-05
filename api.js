@@ -3,6 +3,38 @@ require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
 const dayjs = require("dayjs");
+const fs = require("fs");
+const path = require("path");
+
+const ARQUIVO_LOG_CONSULTAS = path.join(__dirname, "logs_consultas.json");
+const ARQUIVO_LOG_NOTIFICACOES = path.join(__dirname, "logs_notificacoes.json");
+const ARQUIVO_OPTOUT = path.join(__dirname, "usuarios_optout.json");
+const ARQUIVO_ENVIOS = path.join(__dirname, "envios_templates.json");
+
+function carregarJson(caminho, padrao) {
+  try {
+    if (!fs.existsSync(caminho)) return padrao;
+    const conteudo = fs.readFileSync(caminho, "utf8");
+    if (!conteudo.trim()) return padrao;
+    return JSON.parse(conteudo);
+  } catch {
+    return padrao;
+  }
+}
+
+function salvarJson(caminho, dados) {
+  fs.writeFileSync(caminho, JSON.stringify(dados, null, 2));
+}
+
+function adicionarLog(caminho, item) {
+  const logs = carregarJson(caminho, []);
+  logs.unshift({
+    ...item,
+    data: new Date().toISOString(),
+  });
+
+  salvarJson(caminho, logs.slice(0, 1000));
+}
 
 const app = express();
 app.use(express.static("public"));
@@ -875,6 +907,7 @@ app.post("/clienteTelefone", protegerRotaInterna, async (req, res) => {
 app.post("/boleto", protegerRotaInterna, async (req, res) => {
   try {
     const { sistema, tipo, cpf, cnpj, placa, documento } = req.body;
+    const telefoneLog = normalizarTelefoneBR(req.body?.telefone || "");
 
     const placaFinal = normalizarPlaca(placa);
     const docFinal = normalizarDocumento(documento || cpf || cnpj || "");
@@ -902,9 +935,22 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
       });
       const resultadoI9 = adaptarResultadoI9(dadosI9);
 
-      if (temResultadoI9(resultadoI9))
-        return res.json({ sistema: "i9", ...resultadoI9 });
+      if (temResultadoI9(resultadoI9)) {
+        adicionarLog(ARQUIVO_LOG_CONSULTAS, {
+          telefone: telefoneLog,
+          entrada: entradaExibicao,
+          sistema: "i9",
+          status: "encontrado",
+        });
 
+        return res.json({ sistema: "i9", ...resultadoI9 });
+      }
+      adicionarLog(ARQUIVO_LOG_CONSULTAS, {
+        telefone: telefoneLog,
+        entrada: entradaExibicao,
+        sistema: "i9",
+        status: "nao_encontrado",
+      });
       return res.status(404).json({
         sistema: "i9",
         status: "erro",
@@ -922,9 +968,22 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
         documento: docFinal,
       });
 
-      if (temResultadoSouth(dadosSouth))
-        return res.json({ sistema: "south", ...dadosSouth });
+      if (temResultadoSouth(dadosSouth)) {
+        adicionarLog(ARQUIVO_LOG_CONSULTAS, {
+          telefone: telefoneLog,
+          entrada: entradaExibicao,
+          sistema: "south",
+          status: "encontrado",
+        });
 
+        return res.json({ sistema: "south", ...dadosSouth });
+      }
+      adicionarLog(ARQUIVO_LOG_CONSULTAS, {
+        telefone: telefoneLog,
+        entrada: entradaExibicao,
+        sistema: "south",
+        status: "nao_encontrado",
+      });
       return res.status(404).json({
         sistema: "south",
         ...dadosSouth,
@@ -943,8 +1002,16 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
         placa: placaFinal,
       });
       const resultadoI9 = adaptarResultadoI9(dadosI9);
-      if (temResultadoI9(resultadoI9))
+      if (temResultadoI9(resultadoI9)) {
+        adicionarLog(ARQUIVO_LOG_CONSULTAS, {
+          telefone: telefoneLog,
+          entrada: entradaExibicao,
+          sistema: "i9",
+          status: "encontrado",
+        });
+
         return res.json({ sistema: "i9", ...resultadoI9 });
+      }
     } catch (erroI9) {
       console.warn("I9 falhou:", extrairErro(erroI9));
     }
@@ -954,8 +1021,23 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
       documento: docFinal,
     });
 
-    if (temResultadoSouth(dadosSouth))
+    if (temResultadoSouth(dadosSouth)) {
+      adicionarLog(ARQUIVO_LOG_CONSULTAS, {
+        telefone: telefoneLog,
+        entrada: entradaExibicao,
+        sistema: "south",
+        status: "encontrado",
+      });
+
       return res.json({ sistema: "south", ...dadosSouth });
+    }
+
+    adicionarLog(ARQUIVO_LOG_CONSULTAS, {
+      telefone: telefoneLog,
+      entrada: entradaExibicao,
+      sistema: "auto",
+      status: "nao_encontrado",
+    });
 
     return res.status(404).json({
       status: "erro",
@@ -1128,6 +1210,48 @@ app.post("/teste-template", protegerRotaInterna, async (req, res) => {
       erro: erro.response?.data || erro.message,
     });
   }
+});
+app.get("/dashboard/resumo", protegerRotaInterna, (req, res) => {
+  const consultas = carregarJson(ARQUIVO_LOG_CONSULTAS, []);
+  const notificacoes = carregarJson(ARQUIVO_LOG_NOTIFICACOES, []);
+  const optout = carregarJson(ARQUIVO_OPTOUT, []);
+  const envios = carregarJson(ARQUIVO_ENVIOS, {
+    porDia: {},
+    porHora: {},
+    enviosExatos: {},
+  });
+
+  const hoje = dayjs().format("YYYY-MM-DD");
+
+  const consultasHoje = consultas.filter((c) =>
+    String(c.data || "").startsWith(hoje),
+  );
+
+  const notificacoesHoje = notificacoes.filter((n) =>
+    String(n.data || "").startsWith(hoje),
+  );
+
+  res.json({
+    consultasHoje: consultasHoje.length,
+    boletosEncontradosHoje: consultasHoje.filter(
+      (c) => c.status === "encontrado",
+    ).length,
+    notificacoesHoje: notificacoesHoje.length,
+    optoutTotal: Array.isArray(optout) ? optout.length : 0,
+    enviosRegistrados: Object.keys(envios.enviosExatos || {}).length,
+  });
+});
+
+app.get("/dashboard/consultas", protegerRotaInterna, (req, res) => {
+  res.json(carregarJson(ARQUIVO_LOG_CONSULTAS, []).slice(0, 100));
+});
+
+app.get("/dashboard/notificacoes", protegerRotaInterna, (req, res) => {
+  res.json(carregarJson(ARQUIVO_LOG_NOTIFICACOES, []).slice(0, 100));
+});
+
+app.get("/dashboard/optout", protegerRotaInterna, (req, res) => {
+  res.json(carregarJson(ARQUIVO_OPTOUT, []));
 });
 app.listen(PORT, () => {
   console.log(`✅ API rodando na porta ${PORT}`);

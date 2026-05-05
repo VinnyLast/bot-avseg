@@ -782,10 +782,14 @@ async function processarPagamento(from, bodyText, contexto = {}) {
   }
 
   try {
-    let dados;
-    try {
-      const resposta = await http.post("/boleto", payload);
-      dados = resposta.data;
+  let dados;
+
+  // Envia o telefone do associado para registrar no dashboard
+  payload.telefone = from;
+
+  try {
+    const resposta = await http.post("/boleto", payload);
+    dados = resposta.data;
     } catch (erroApi) {
       dados = erroApi.response?.data;
       if (!dados) {
