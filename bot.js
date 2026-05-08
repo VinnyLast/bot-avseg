@@ -1278,7 +1278,7 @@ app.on("chatwoot_message", async ({ from, bodyText, conversationId, raw }) => {
 // CRON — NOTIFICAÇÕES DIÁRIAS (09:00)
 // =============================================================================
 if (ENABLE_CRON) {
-  cron.schedule("35 19 * * *", async () => {
+  cron.schedule("40 19 * * *", async () => {
     console.log("⏰ Iniciando rotina de notificações diárias...");
     const http = axiosInterno();
 
