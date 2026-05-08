@@ -201,8 +201,13 @@ app.get("/webhook", (req, res) => {
 // WEBHOOK E CHATWOOT— recebimento de mensagens (POST)
 // =============================================================================
 app.post("/webhook", (req, res) => {
-  console.log("WEBHOOK RECEBIDO");
-  console.log(JSON.stringify(req.body, null, 2));
+  const status =
+  req.body?.entry?.[0]?.changes?.[0]?.value?.statuses?.[0]?.status;
+
+const numero =
+  req.body?.entry?.[0]?.changes?.[0]?.value?.statuses?.[0]?.recipient_id;
+
+console.log(`📩 Webhook: ${status || "evento"} → ${numero || "ND"}`);
 
   res.sendStatus(200);
 
