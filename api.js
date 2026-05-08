@@ -6,6 +6,7 @@ const dayjs = require("dayjs");
 const fs = require("fs");
 const path = require("path");
 
+const ARQUIVO_I9_PLACAS = path.join(__dirname, "i9_placas.json");
 const ARQUIVO_LOG_CONSULTAS = path.join(__dirname, "logs_consultas.json");
 const ARQUIVO_LOG_NOTIFICACOES = path.join(__dirname, "logs_notificacoes.json");
 const ARQUIVO_LOG_AVALIACOES = path.join(__dirname, "logs_avaliacoes.json");
@@ -559,46 +560,51 @@ async function i9BuscarVencimentosPorPlacas(placas, dataAlvo, tipoNotificacao) {
  * Estratégia: obtém as placas pelo South (que já tem listagem por data)
  * e cruza com o I9 individualmente.
  */
+function carregarPlacasI9() {
+  const placas = carregarJson(ARQUIVO_I9_PLACAS, []);
+
+  if (!Array.isArray(placas)) return [];
+
+  return [
+    ...new Set(
+      placas
+        .map((p) => normalizarPlaca(p))
+        .filter(Boolean)
+    ),
+  ];
+}
 async function i9BuscarVencimentos(dataAlvo, tipoNotificacao) {
   try {
-    const boletosDoSouth = await southBuscarVencimentos(
-      dataAlvo,
-      tipoNotificacao,
-    );
-    const placas = [
-      ...new Set(
-        boletosDoSouth.map((b) => normalizarPlaca(b.placa)).filter(Boolean),
-      ),
-    ];
+    const placas = carregarPlacasI9();
 
     if (!placas.length) {
-      console.log(
-        `ℹ️ I9 [${tipoNotificacao}]: sem placas no South para ${dataAlvo}`,
-      );
+      console.log(`ℹ️ I9 [${tipoNotificacao}]: nenhuma placa cadastrada em i9_placas.json`);
       return [];
     }
 
     console.log(
-      `🔍 I9 [${tipoNotificacao}]: consultando ${placas.length} placa(s) — ${dataAlvo}`,
+      `🔍 I9 [${tipoNotificacao}]: consultando ${placas.length} placa(s) próprias — ${dataAlvo}`
     );
+
     const resultados = await i9BuscarVencimentosPorPlacas(
       placas,
       dataAlvo,
-      tipoNotificacao,
+      tipoNotificacao
     );
+
     console.log(
-      `✅ I9 [${tipoNotificacao}]: ${resultados.length} resultado(s)`,
+      `✅ I9 [${tipoNotificacao}]: ${resultados.length} resultado(s)`
     );
+
     return resultados;
   } catch (erro) {
     console.error(
       `❌ Erro i9BuscarVencimentos [${tipoNotificacao}]:`,
-      extrairErro(erro),
+      extrairErro(erro)
     );
     return [];
   }
 }
-
 // =============================================================================
 // SOUTH
 // =============================================================================
