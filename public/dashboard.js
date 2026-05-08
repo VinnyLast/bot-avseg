@@ -281,6 +281,7 @@ async function carregarNotificacoes() {
     .map(
       (n) => `
       <tr>
+        <td>${(n.sistema || "-").toUpperCase()}</td>
         <td>${formatarData(n.data)}</td>
         <td>${n.telefone || "-"}</td>
         <td>${criarBadgeTipo(n.tipo || "-")}</td>
