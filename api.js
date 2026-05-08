@@ -13,6 +13,10 @@ const ARQUIVO_LOG_AVALIACOES = path.join(__dirname, "logs_avaliacoes.json");
 const ARQUIVO_OPTOUT = path.join(__dirname, "usuarios_optout.json");
 const ARQUIVO_ENVIOS = path.join(__dirname, "envios_templates.json");
 
+function registrarLogNotificacao(item) {
+  adicionarLog(ARQUIVO_LOG_NOTIFICACOES, item);
+}
+
 function carregarJson(caminho, padrao) {
   try {
     if (!fs.existsSync(caminho)) return padrao;
@@ -1349,4 +1353,5 @@ module.exports = {
   enviarImagem,
   enviarTemplate,
   normalizarTelefoneBR,
+  registrarLogNotificacao,
 };

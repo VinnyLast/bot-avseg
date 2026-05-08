@@ -19,6 +19,7 @@ const {
   enviarImagem,
   enviarTemplate,
   normalizarTelefoneBR,
+  registrarLogNotificacao,
 } = require("./api");
 
 // =============================================================================
@@ -747,17 +748,17 @@ async function processarAvaliacao(from, texto, contexto = {}) {
 
   const estrelas = "⭐".repeat(nota);
   registrarLogAvaliacao({
-  telefone: normalizarTelefoneBR(from),
-  nota,
-  origem: contexto.origem || "meta",
-});
+    telefone: normalizarTelefoneBR(from),
+    nota,
+    origem: contexto.origem || "meta",
+  });
 
-avaliacoes.push({
-  telefone: normalizarTelefoneBR(from),
-  nota,
-  data: new Date().toISOString(),
-  origem: contexto.origem || "meta",
-});
+  avaliacoes.push({
+    telefone: normalizarTelefoneBR(from),
+    nota,
+    data: new Date().toISOString(),
+    origem: contexto.origem || "meta",
+  });
   console.log(`📊 Avaliação registrada: ${from} — nota ${nota}/5`);
 
   const mensagemNota = {
@@ -803,14 +804,14 @@ async function processarPagamento(from, bodyText, contexto = {}) {
   }
 
   try {
-  let dados;
+    let dados;
 
-  // Envia o telefone do associado para registrar no dashboard
-  payload.telefone = from;
+    // Envia o telefone do associado para registrar no dashboard
+    payload.telefone = from;
 
-  try {
-    const resposta = await http.post("/boleto", payload);
-    dados = resposta.data;
+    try {
+      const resposta = await http.post("/boleto", payload);
+      dados = resposta.data;
     } catch (erroApi) {
       dados = erroApi.response?.data;
       if (!dados) {
@@ -1038,39 +1039,39 @@ async function processarMensagem({
     return;
   }
 
-// 2. Opt-out / opt-in (melhorado)
-const textoLimpo = texto.trim().toLowerCase();
+  // 2. Opt-out / opt-in (melhorado)
+  const textoLimpo = texto.trim().toLowerCase();
 
-if (textoLimpo === "0" || textoLimpo === "parar") {
-  usuariosOptOut.add(normalizarTelefoneBR(from));
-  salvarOptOut();
-  estadoUsuario[from] = null;
+  if (textoLimpo === "0" || textoLimpo === "parar") {
+    usuariosOptOut.add(normalizarTelefoneBR(from));
+    salvarOptOut();
+    estadoUsuario[from] = null;
 
-  await enviarTextoCanal(
-    from,
-    `🚫 *Notificações desativadas com sucesso.*\n\n` +
-    `Você não receberá mais:\n` +
-    `• Lembretes de vencimento\n` +
-    `• Avisos de pendência\n\n` +
-    `Se quiser voltar a receber, digite *ativar notificações*.`,
-    contexto
-  );
-  return;
-}
+    await enviarTextoCanal(
+      from,
+      `🚫 *Notificações desativadas com sucesso.*\n\n` +
+        `Você não receberá mais:\n` +
+        `• Lembretes de vencimento\n` +
+        `• Avisos de pendência\n\n` +
+        `Se quiser voltar a receber, digite *ativar notificações*.`,
+      contexto,
+    );
+    return;
+  }
 
-if (textoLimpo === "ativar notificações") {
-  usuariosOptOut.delete(normalizarTelefoneBR(from));
-  salvarOptOut();
-  estadoUsuario[from] = null;
+  if (textoLimpo === "ativar notificações") {
+    usuariosOptOut.delete(normalizarTelefoneBR(from));
+    salvarOptOut();
+    estadoUsuario[from] = null;
 
-  await enviarTextoCanal(
-    from,
-    `✅ *Notificações reativadas com sucesso!*\n\n` +
-    `Você voltará a receber lembretes e avisos normalmente. 📩`,
-    contexto
-  );
-  return;
-}
+    await enviarTextoCanal(
+      from,
+      `✅ *Notificações reativadas com sucesso!*\n\n` +
+        `Você voltará a receber lembretes e avisos normalmente. 📩`,
+      contexto,
+    );
+    return;
+  }
 
   // 3. Menu
   if (["oi", "olá", "ola", "menu", "inicio", "início"].includes(texto)) {
@@ -1333,6 +1334,16 @@ if (ENABLE_CRON) {
 
         try {
           await enviarTemplate(telefone, templateName, parametros);
+          registrarLogNotificacao({
+            telefone,
+            nome: item.nome || "Associado",
+            placa: item.placa || "ND",
+            vencimento: item.vencimento || "ND",
+            tipo: item.tipo || "ND",
+            sistema: item.sistema || "ND",
+            status: "enviado",
+            template: templateName,
+          });
           registrarEnvioTemplate(controleEnvio);
 
           const espera = delayAleatorioTemplate();
