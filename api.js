@@ -738,7 +738,7 @@ async function southBuscarVencimentos(dataAlvo, tipoNotificacao) {
               "Content-Type": "application/json",
               Accept: "application/json",
             },
-            timeout: 15000,
+            timeout: 60000,
           },
         );
 
