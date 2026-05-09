@@ -1,135 +1,67 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard AVSEG Bot</title>
-    <link rel="stylesheet" href="/dashboard.css" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  </head>
-  <body>
-    <main class="container">
-      <header class="topbar">
-        <div>
-          <h1>Dashboard AVSEG Bot</h1>
-          <p>Painel operacional do atendimento e notificações</p>
-        </div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard AVSEG Bot</title>
+  <link rel="stylesheet" href="/dashboard.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
 
-        <div class="topbar-info">
-          <span class="status-dot"></span>
-          <span>Atualização automática a cada 10 segundos</span>
-        </div>
-      </header>
+<body>
+  <main class="container">
+    <header class="topbar">
+      <div>
+        <h1>Dashboard AVSEG Bot</h1>
+        <p>Painel operacional do atendimento e notificações</p>
+      </div>
 
+      <div class="topbar-info">
+        <span class="status-dot"></span>
+        <span>Atualização automática a cada 10 segundos</span>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="resumo">Resumo</button>
+      <button class="tab-btn" data-tab="consultas">Consultas</button>
+      <button class="tab-btn" data-tab="notificacoes">Notificações</button>
+      <button class="tab-btn" data-tab="chat">Mini Chat</button>
+      <button class="tab-btn" data-tab="avaliacoes">Avaliações</button>
+    </nav>
+
+    <div class="tab-content active" id="tab-resumo">
       <section class="cards">
-        <div class="card">
-          <span>Consultas hoje</span>
-          <strong id="consultasHoje">0</strong>
-        </div>
-
-        <div class="card">
-          <span>Boletos encontrados</span>
-          <strong id="boletosHoje">0</strong>
-        </div>
-
-        <div class="card">
-          <span>Notificações hoje</span>
-          <strong id="notificacoesHoje">0</strong>
-        </div>
-
-        <div class="card">
-          <span>Opt-outs</span>
-          <strong id="optoutTotal">0</strong>
-        </div>
-
-        <div class="card">
-          <span>Envios registrados</span>
-          <strong id="enviosRegistrados">0</strong>
-        </div>
-        <div class="card">
-          <span>Avaliações hoje</span>
-          <strong id="avaliacoesHoje">0</strong>
-        </div>
-
-        <div class="card">
-          <span>Média geral</span>
-          <strong id="mediaAvaliacoes">0.0</strong>
-        </div>
+        <div class="card"><span>Consultas hoje</span><strong id="consultasHoje">0</strong></div>
+        <div class="card"><span>Boletos encontrados</span><strong id="boletosHoje">0</strong></div>
+        <div class="card"><span>Notificações hoje</span><strong id="notificacoesHoje">0</strong></div>
+        <div class="card"><span>Opt-outs</span><strong id="optoutTotal">0</strong></div>
+        <div class="card"><span>Envios registrados</span><strong id="enviosRegistrados">0</strong></div>
+        <div class="card"><span>Avaliações hoje</span><strong id="avaliacoesHoje">0</strong></div>
+        <div class="card"><span>Média geral</span><strong id="mediaAvaliacoes">0.0</strong></div>
       </section>
 
       <section class="grid">
         <div class="panel">
-          <div class="panel-header">
-            <h2>Notificações por tipo</h2>
-          </div>
-          <div class="chart-wrap">
-            <canvas id="graficoNotificacoes"></canvas>
-          </div>
+          <div class="panel-header"><h2>Notificações por tipo</h2></div>
+          <div class="chart-wrap"><canvas id="graficoNotificacoes"></canvas></div>
         </div>
 
         <div class="panel">
-          <div class="panel-header">
-            <h2>Resumo rápido</h2>
-          </div>
-
+          <div class="panel-header"><h2>Resumo rápido</h2></div>
           <div class="quick-list">
-            <div class="quick-item">
-              <span>Total de consultas carregadas</span>
-              <strong id="totalConsultas">0</strong>
-            </div>
-
-            <div class="quick-item">
-              <span>Total de notificações carregadas</span>
-              <strong id="totalNotificacoes">0</strong>
-            </div>
-
-            <div class="quick-item">
-              <span>Consultas I9</span>
-              <strong id="consultasI9">0</strong>
-            </div>
-
-            <div class="quick-item">
-              <span>Consultas South</span>
-              <strong id="consultasSouth">0</strong>
-            </div>
+            <div class="quick-item"><span>Total de consultas carregadas</span><strong id="totalConsultas">0</strong></div>
+            <div class="quick-item"><span>Total de notificações carregadas</span><strong id="totalNotificacoes">0</strong></div>
+            <div class="quick-item"><span>Consultas I9</span><strong id="consultasI9">0</strong></div>
+            <div class="quick-item"><span>Consultas South</span><strong id="consultasSouth">0</strong></div>
           </div>
         </div>
       </section>
+    </div>
+
+    <div class="tab-content" id="tab-consultas">
       <section class="panel">
-        <div class="panel-header">
-          <h2>Avaliações de atendimento</h2>
-        </div>
-
-        <div class="chart-wrap">
-          <canvas id="graficoAvaliacoes"></canvas>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-header">
-          <h2>Últimas avaliações</h2>
-        </div>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Telefone</th>
-                <th>Nota</th>
-                <th>Origem</th>
-              </tr>
-            </thead>
-            <tbody id="avaliacoesTabela"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-header">
-          <h2>Últimas consultas</h2>
-        </div>
-
+        <div class="panel-header"><h2>Últimas consultas</h2></div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -145,12 +77,11 @@
           </table>
         </div>
       </section>
+    </div>
 
+    <div class="tab-content" id="tab-notificacoes">
       <section class="panel">
-        <div class="panel-header">
-          <h2>Últimas notificações</h2>
-        </div>
-
+        <div class="panel-header"><h2>Últimas notificações</h2></div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -168,29 +99,53 @@
           </table>
         </div>
       </section>
+    </div>
+
+    <div class="tab-content" id="tab-chat">
       <section class="panel">
-  <div class="panel-header">
-    <h2>Mini chat - últimas conversas</h2>
-  </div>
+        <div class="panel-header"><h2>Mini chat - últimas conversas</h2></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Nome</th>
+                <th>Telefone</th>
+                <th>Origem</th>
+                <th>Mensagem</th>
+              </tr>
+            </thead>
+            <tbody id="conversasTabela"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
 
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Data</th>
-          <th>Nome</th>
-          <th>Telefone</th>
-          <th>Origem</th>
-          <th>Mensagem</th>
-        </tr>
-      </thead>
+    <div class="tab-content" id="tab-avaliacoes">
+      <section class="panel">
+        <div class="panel-header"><h2>Avaliações de atendimento</h2></div>
+        <div class="chart-wrap"><canvas id="graficoAvaliacoes"></canvas></div>
+      </section>
 
-      <tbody id="conversasTabela"></tbody>
-    </table>
-  </div>
-</section>
-    </main>
+      <section class="panel">
+        <div class="panel-header"><h2>Últimas avaliações</h2></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Telefone</th>
+                <th>Nota</th>
+                <th>Origem</th>
+              </tr>
+            </thead>
+            <tbody id="avaliacoesTabela"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
 
-    <script src="/dashboard.js"></script>
-  </body>
+  <script src="/dashboard.js"></script>
+</body>
 </html>

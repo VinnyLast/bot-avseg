@@ -335,6 +335,24 @@ async function carregarTudo() {
     console.error(erro);
   }
 }
+function configurarAbas() {
+  const botoes = document.querySelectorAll(".tab-btn");
+  const conteudos = document.querySelectorAll(".tab-content");
+
+  botoes.forEach((botao) => {
+    botao.addEventListener("click", () => {
+      const aba = botao.dataset.tab;
+
+      botoes.forEach((b) => b.classList.remove("active"));
+      conteudos.forEach((c) => c.classList.remove("active"));
+
+      botao.classList.add("active");
+      document.getElementById(`tab-${aba}`)?.classList.add("active");
+    });
+  });
+}
+
+configurarAbas();
 
 carregarTudo();
 setInterval(carregarTudo, 10000);
