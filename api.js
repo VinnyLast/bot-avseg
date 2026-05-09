@@ -222,7 +222,20 @@ console.log(`📩 Webhook: ${status || "evento"} → ${numero || "ND"}`);
   const changes = entry?.changes?.[0];
   const value = changes?.value;
 
-  if (!value?.messages?.length) return;
+  const statusMeta = value?.statuses?.[0];
+
+if (statusMeta) {
+  registrarLogConversa({
+    telefone: normalizarTelefoneBR(statusMeta.recipient_id || ""),
+    nome: "Cliente",
+    origem: "status",
+    tipo: "status",
+    mensagem: statusMeta.status,
+    message_id: statusMeta.id,
+  });
+}
+
+if (!value?.messages?.length) return;
 
   const message = value.messages[0];
   const from = normalizarTelefoneBR(message.from);
@@ -1355,6 +1368,17 @@ async function enviarTemplate(to, templateName, parametros = []) {
         },
       },
     );
+    const messageId = response.data?.messages?.[0]?.id;
+
+registrarLogConversa({
+  telefone: to,
+  nome: "Associado",
+  origem: "bot",
+  tipo: "template",
+  mensagem: templateName,
+  message_id: messageId,
+  status: "sent",
+});
 
     console.log(
       `✅ TEMPLATE ENVIADO (${templateName}) para ${to}:`,

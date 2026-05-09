@@ -369,6 +369,16 @@ word-break: break-word;
 .chat-bubble {
   white-space: pre-wrap;
 }
+.msg-status {
+  margin-top: 6px;
+  font-size: 12px;
+  opacity: 0.8;
+  text-align: right;
+}
+
+.msg-status.read {
+  color: #53bdeb;
+}
 
 @media (max-width: 768px) {
   .mini-chat {
