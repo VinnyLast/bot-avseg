@@ -303,25 +303,93 @@ async function carregarNotificacoes() {
 
   montarGraficoNotificacoes(notificacoes);
 }
+let conversasCache = [];
+let telefoneSelecionado = null;
+
 async function carregarConversas() {
-  const conversas = await apiGet("/dashboard/conversas");
-  const tbody = document.getElementById("conversasTabela");
+  conversasCache = await apiGet("/dashboard/conversas");
 
-  if (!tbody) return;
+  const grupos = {};
 
-  tbody.innerHTML = conversas
+  conversasCache.forEach((c) => {
+    const telefone = c.telefone || "sem_telefone";
+
+    if (!grupos[telefone]) {
+      grupos[telefone] = {
+        telefone,
+        nome: c.nome || "Cliente",
+        ultimaData: c.data,
+        ultimaMensagem: c.mensagem || "-",
+        mensagens: [],
+      };
+    }
+
+    grupos[telefone].mensagens.push(c);
+
+    if (new Date(c.data) > new Date(grupos[telefone].ultimaData)) {
+      grupos[telefone].ultimaData = c.data;
+      grupos[telefone].ultimaMensagem = c.mensagem || "-";
+      grupos[telefone].nome = c.nome || grupos[telefone].nome;
+    }
+  });
+
+  const lista = Object.values(grupos).sort(
+    (a, b) => new Date(b.ultimaData) - new Date(a.ultimaData)
+  );
+
+  const chatLista = document.getElementById("chatLista");
+  if (!chatLista) return;
+
+  chatLista.innerHTML = lista
     .map(
       (c) => `
-      <tr>
-        <td>${formatarData(c.data)}</td>
-        <td>${c.nome || "-"}</td>
-        <td>${c.telefone || "-"}</td>
-        <td>${c.origem || "-"}</td>
-        <td>${c.mensagem || "-"}</td>
-      </tr>
-    `,
+      <div class="chat-contact ${telefoneSelecionado === c.telefone ? "active" : ""}" onclick="abrirConversa('${c.telefone}')">
+        <strong>${c.nome}</strong>
+        <span>${c.telefone}</span><br>
+        <span>${c.ultimaMensagem}</span>
+      </div>
+    `
     )
     .join("");
+
+  if (!telefoneSelecionado && lista.length > 0) {
+    abrirConversa(lista[0].telefone);
+  } else if (telefoneSelecionado) {
+    abrirConversa(telefoneSelecionado);
+  }
+}
+
+function abrirConversa(telefone) {
+  telefoneSelecionado = telefone;
+
+  const mensagens = conversasCache
+    .filter((c) => c.telefone === telefone)
+    .sort((a, b) => new Date(a.data) - new Date(b.data));
+
+  const nome = mensagens[mensagens.length - 1]?.nome || "Cliente";
+
+  document.getElementById("chatHeader").textContent = `${nome} - ${telefone}`;
+
+  const area = document.getElementById("chatMensagens");
+
+  area.innerHTML = mensagens
+    .map((m) => {
+      const classe = m.origem === "bot" ? "chat-bot" : "chat-cliente";
+
+      return `
+        <div class="chat-bubble ${classe}">
+          ${m.mensagem || "-"}
+          <span class="chat-date">${formatarData(m.data)} • ${m.origem || "-"}</span>
+        </div>
+      `;
+    })
+    .join("");
+
+  area.scrollTop = area.scrollHeight;
+
+  document.querySelectorAll(".chat-contact").forEach((el) => {
+    el.classList.remove("active");
+  });
 }
 async function carregarTudo() {
   try {

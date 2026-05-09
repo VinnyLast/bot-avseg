@@ -281,3 +281,92 @@ tr:hover td {
     grid-template-columns: 1fr;
   }
 }
+.mini-chat {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+  min-height: 520px;
+}
+
+.chat-list {
+  background: #111;
+  border-radius: 16px;
+  overflow-y: auto;
+  max-height: 520px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.chat-contact {
+  padding: 14px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.chat-contact:hover,
+.chat-contact.active {
+  background: rgba(244,196,0,0.12);
+}
+
+.chat-contact strong {
+  display: block;
+  color: #fff;
+}
+
+.chat-contact span {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.chat-window {
+  background: #111;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  flex-direction: column;
+  max-height: 520px;
+}
+
+.chat-header {
+  padding: 14px;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.chat-messages {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.chat-bubble {
+  max-width: 75%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.chat-bot {
+  margin-left: auto;
+  background: #f4c400;
+  color: #000;
+}
+
+.chat-cliente {
+  margin-right: auto;
+  background: #222;
+  color: #fff;
+}
+
+.chat-date {
+  display: block;
+  font-size: 11px;
+  opacity: 0.65;
+  margin-top: 4px;
+}
+
+@media (max-width: 768px) {
+  .mini-chat {
+    grid-template-columns: 1fr;
+  }
+}
