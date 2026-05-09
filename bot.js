@@ -1250,7 +1250,36 @@ Fico à disposição em caso de dúvidas!`,
     await processarPagamento(from, bodyText, contexto);
     return;
   }
+const respostasNaturais = [
+  "obrigado",
+  "obg",
+  "valeu",
+  "amei",
+  "❤️",
+  "😍",
+  "🙏",
+  "amém",
+  "amem",
+  "Amém",
+  "Amem",
+  "parabéns",
+  "brigado",
+  "show",
+  "top",
+  "ok",
+  "okay",
+  "kkk",
+  "legal",
+  "gratidão",
+];
 
+const ehRespostaNatural = respostasNaturais.some((t) =>
+  texto.toLowerCase().includes(t)
+);
+
+if (ehRespostaNatural) {
+  return;
+}
   // Fallback
   await enviarTextoCanal(
     from,
