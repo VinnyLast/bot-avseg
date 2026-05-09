@@ -358,7 +358,27 @@ async function carregarConversas() {
     abrirConversa(telefoneSelecionado);
   }
 }
+function renderizarStatus(status) {
+  if (!status) return "";
 
+  if (status === "sent") {
+    return `<div class="msg-status">✔</div>`;
+  }
+
+  if (status === "delivered") {
+    return `<div class="msg-status">✔✔</div>`;
+  }
+
+  if (status === "read") {
+    return `<div class="msg-status read">✔✔</div>`;
+  }
+
+  if (status === "failed") {
+    return `<div class="msg-status failed">⚠️ falhou</div>`;
+  }
+
+  return "";
+}
 function abrirConversa(telefone) {
   telefoneSelecionado = telefone;
 
@@ -379,6 +399,9 @@ function abrirConversa(telefone) {
       return `
         <div class="chat-bubble ${classe}">
           ${m.mensagem || "-"}
+${m.origem === "bot"
+  ? renderizarStatus(statusPorMensagem[m.message_id] || m.status)
+  : ""}
           <span class="chat-date">${formatarData(m.data)} • ${m.origem || "-"}</span>
         </div>
       `;
@@ -386,6 +409,13 @@ function abrirConversa(telefone) {
     .join("");
 
   area.scrollTop = area.scrollHeight;
+  const statusPorMensagem = {};
+
+conversasCache.forEach((c) => {
+  if (c.tipo === "status" && c.message_id) {
+    statusPorMensagem[c.message_id] = c.mensagem;
+  }
+});
 
   document.querySelectorAll(".chat-contact").forEach((el) => {
     el.classList.remove("active");
