@@ -1323,9 +1323,25 @@ app.on("chatwoot_message", async ({ from, bodyText, conversationId, raw }) => {
 // =============================================================================
 // CRON — NOTIFICAÇÕES DIÁRIAS (09:00)
 // =============================================================================
+function ehDiaDePico() {
+  const hoje = new Date();
+  // Ajuste UTC-3 Brasil
+  const diaBrasil = new Date(hoje.getTime() - 3 * 60 * 60 * 1000).getDate();
+  
+  // Dias com notificações: 5 dias antes, 2 dias antes, 4 depois, 15 depois
+  // dos vencimentos 10, 20 e 30
+  const diasAtivos = [5, 8, 10, 14, 15, 18, 20, 24, 25, 28, 30, 3, 4];
+  
+  return diasAtivos.includes(diaBrasil);
+}
 if (ENABLE_CRON) {
   cron.schedule("0 11-23,0-1 * * *", async () => {
-    console.log("⏰ Iniciando rotina de notificações diárias...");
+  if (!ehDiaDePico()) {
+    console.log("📅 Dia sem pico — pulando consultas pesadas.");
+    return;
+  }
+  
+  console.log("⏰ Iniciando rotina de notificações diárias...");
     const http = axiosInterno();
 
     try {

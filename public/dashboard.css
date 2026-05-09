@@ -379,6 +379,9 @@ word-break: break-word;
 .msg-status.read {
   color: #53bdeb;
 }
+.msg-status.failed {
+  color: #ff6b6b;
+}
 
 @media (max-width: 768px) {
   .mini-chat {
