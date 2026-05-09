@@ -20,6 +20,7 @@ const {
   enviarTemplate,
   normalizarTelefoneBR,
   registrarLogNotificacao,
+  registrarLogConversa,
 } = require("./api");
 
 // =============================================================================
@@ -1360,6 +1361,15 @@ if (ENABLE_CRON) {
             status: "enviado",
             template: templateName,
           });
+          registrarLogConversa({
+  telefone,
+  nome: item.nome || "Associado",
+  origem: "bot",
+  tipo: "template",
+  mensagem: templateName,
+  status: "enviado",
+  sistema: item.sistema || "ND",
+});
           registrarEnvioTemplate(controleEnvio);
 
           const espera = delayAleatorioTemplate();

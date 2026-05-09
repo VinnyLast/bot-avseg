@@ -303,13 +303,33 @@ async function carregarNotificacoes() {
 
   montarGraficoNotificacoes(notificacoes);
 }
+async function carregarConversas() {
+  const conversas = await apiGet("/dashboard/conversas");
+  const tbody = document.getElementById("conversasTabela");
 
+  if (!tbody) return;
+
+  tbody.innerHTML = conversas
+    .map(
+      (c) => `
+      <tr>
+        <td>${formatarData(c.data)}</td>
+        <td>${c.nome || "-"}</td>
+        <td>${c.telefone || "-"}</td>
+        <td>${c.origem || "-"}</td>
+        <td>${c.mensagem || "-"}</td>
+      </tr>
+    `,
+    )
+    .join("");
+}
 async function carregarTudo() {
   try {
     await carregarResumo();
     await carregarConsultas();
     await carregarNotificacoes();
     await carregarAvaliacoes();
+    await carregarConversas();
   } catch (erro) {
     alert("Erro ao carregar dashboard. Confira a chave interna.");
     console.error(erro);

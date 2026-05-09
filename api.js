@@ -12,7 +12,11 @@ const ARQUIVO_LOG_NOTIFICACOES = path.join(__dirname, "logs_notificacoes.json");
 const ARQUIVO_LOG_AVALIACOES = path.join(__dirname, "logs_avaliacoes.json");
 const ARQUIVO_OPTOUT = path.join(__dirname, "usuarios_optout.json");
 const ARQUIVO_ENVIOS = path.join(__dirname, "envios_templates.json");
+const ARQUIVO_LOG_CONVERSAS = path.join(__dirname, "logs_conversas.json");
 
+function registrarLogConversa(item) {
+  adicionarLog(ARQUIVO_LOG_CONVERSAS, item);
+}
 function registrarLogNotificacao(item) {
   adicionarLog(ARQUIVO_LOG_NOTIFICACOES, item);
 }
@@ -224,7 +228,13 @@ console.log(`📩 Webhook: ${status || "evento"} → ${numero || "ND"}`);
   const from = normalizarTelefoneBR(message.from);
   const msgType = message.type;
   const bodyText = message.text?.body?.trim() || "";
-
+  registrarLogConversa({
+    telefone: from,
+    nome: value?.contacts?.[0]?.profile?.name || "Cliente",
+    origem: "cliente",
+    tipo: msgType,
+    mensagem: bodyText || `[${msgType}]`,
+  });
   if (!from) {
     console.warn("⚠️ Número inválido recebido no webhook");
     return;
@@ -1305,6 +1315,9 @@ app.get("/dashboard/optout", protegerRotaInterna, (req, res) => {
 app.get("/dashboard/avaliacoes", protegerRotaInterna, (req, res) => {
   res.json(carregarJson(ARQUIVO_LOG_AVALIACOES, []).slice(0, 100));
 });
+app.get("/dashboard/conversas", protegerRotaInterna, (req, res) => {
+  res.json(carregarJson(ARQUIVO_LOG_CONVERSAS, []).slice(0, 300));
+});
 app.listen(PORT, () => {
   console.log(`✅ API rodando na porta ${PORT}`);
 });
@@ -1359,4 +1372,5 @@ module.exports = {
   enviarTemplate,
   normalizarTelefoneBR,
   registrarLogNotificacao,
+  registrarLogConversa,
 };
