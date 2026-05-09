@@ -278,19 +278,20 @@ async function carregarNotificacoes() {
     notificacoes.length;
 
   tbody.innerHTML = notificacoes
-    .map(
-      (n) => `
-      <tr>
-        <td>${(n.sistema || "-").toUpperCase()}</td>
-        <td>${formatarData(n.data)}</td>
-        <td>${n.telefone || "-"}</td>
-        <td>${criarBadgeTipo(n.tipo || "-")}</td>
-        <td>${n.placa || "-"}</td>
-        <td>${n.vencimento || "-"}</td>
-      </tr>
-    `,
-    )
-    .join("");
+  .map(
+    (n) => `
+    <tr>
+      <td>${(n.sistema || "-").toUpperCase()}</td>
+      <td>${formatarData(n.data)}</td>
+      <td>${n.nome || "-"}</td>
+      <td>${n.telefone || "-"}</td>
+      <td>${criarBadgeTipo(n.tipo || "-")}</td>
+      <td>${n.placa || "-"}</td>
+      <td>${n.vencimento || "-"}</td>
+    </tr>
+  `,
+)
+.join("");
 
   montarGraficoNotificacoes(notificacoes);
 }

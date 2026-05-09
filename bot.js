@@ -92,6 +92,14 @@ const ultimoCanalPorNumero = Object.create(null);
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+function estaEmHorarioAtendimento() {
+  const agora = new Date();
+
+  // Ajuste UTC-3 Brasil/Bahia
+  const horaBrasil = (agora.getUTCHours() - 3 + 24) % 24;
+
+  return horaBrasil >= 8 && horaBrasil < 18;
+}
 function carregarJson(caminho, padrao) {
   try {
     if (!fs.existsSync(caminho)) return padrao;
@@ -1164,6 +1172,14 @@ Fico à disposição em caso de dúvidas!`,
 
   // 5 — Falar com atendente (cria conversa no Chatwoot)
   if (texto === "5") {
+    if (!estaEmHorarioAtendimento()) {
+  await enviarTextoCanal(
+    from,
+    `⏰ *Atendimento humano indisponível no momento.*\n\nNosso horário de atendimento é de *08:00 às 18:00*.\n\nDigite *menu* para acessar as opções automáticas.`,
+    contexto,
+  );
+  return;
+}
     modoHumano.add(from);
     estadoUsuario[from] = null;
 
@@ -1278,7 +1294,7 @@ app.on("chatwoot_message", async ({ from, bodyText, conversationId, raw }) => {
 // CRON — NOTIFICAÇÕES DIÁRIAS (09:00)
 // =============================================================================
 if (ENABLE_CRON) {
-  cron.schedule("55 22 * * *", async () => {
+  cron.schedule("0 11-23,0-1 * * *", async () => {
     console.log("⏰ Iniciando rotina de notificações diárias...");
     const http = axiosInterno();
 
@@ -1368,7 +1384,7 @@ if (ENABLE_CRON) {
     }
   });
 
-  console.log("⏰ CRON habilitado — notificações diárias às 09:00.");
+  console.log("⏰ CRON habilitado — notificações de hora em hora das 08:00 às 22:00.");
 } else {
   console.log("🧪 CRON desabilitado (ENABLE_CRON != true).");
 }
