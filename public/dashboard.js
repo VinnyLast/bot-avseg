@@ -327,10 +327,16 @@ async function carregarConversas() {
     grupos[telefone].mensagens.push(c);
 
     if (new Date(c.data) > new Date(grupos[telefone].ultimaData)) {
-      grupos[telefone].ultimaData = c.data;
-      grupos[telefone].ultimaMensagem = c.mensagem || "-";
-      grupos[telefone].nome = c.nome || grupos[telefone].nome;
-    }
+  grupos[telefone].ultimaData = c.data;
+
+  if (c.tipo !== "status") {
+    grupos[telefone].ultimaMensagem = c.mensagem || "-";
+  }
+
+  if (c.tipo !== "status" && c.nome && c.nome !== "Cliente") {
+    grupos[telefone].nome = c.nome;
+  }
+}
   });
 
   const lista = Object.values(grupos).sort(
@@ -361,21 +367,10 @@ async function carregarConversas() {
 function renderizarStatus(status) {
   if (!status) return "";
 
-  if (status === "sent") {
-    return `<div class="msg-status">✔</div>`;
-  }
-
-  if (status === "delivered") {
-    return `<div class="msg-status">✔✔</div>`;
-  }
-
-  if (status === "read") {
-    return `<div class="msg-status read">✔✔</div>`;
-  }
-
-  if (status === "failed") {
-    return `<div class="msg-status failed">⚠️ falhou</div>`;
-  }
+  if (status === "sent") return `<div class="msg-status">✔ Enviado</div>`;
+  if (status === "delivered") return `<div class="msg-status">✔✔ Entregue</div>`;
+  if (status === "read") return `<div class="msg-status read">✔✔ Visto</div>`;
+  if (status === "failed") return `<div class="msg-status failed">⚠️ Falhou</div>`;
 
   return "";
 }
@@ -386,7 +381,8 @@ function abrirConversa(telefone) {
   .filter((c) => c.telefone === telefone && c.tipo !== "status")
     .sort((a, b) => new Date(a.data) - new Date(b.data));
 
-  const nome = mensagens[mensagens.length - 1]?.nome || "Cliente";
+  const nome =
+  mensagens.find((m) => m.nome && m.nome !== "Cliente")?.nome || "Cliente";
 
   document.getElementById("chatHeader").textContent = `${nome} - ${telefone}`;
 
