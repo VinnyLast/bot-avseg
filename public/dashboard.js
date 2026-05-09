@@ -390,9 +390,17 @@ function abrirConversa(telefone) {
 
   document.getElementById("chatHeader").textContent = `${nome} - ${telefone}`;
 
-  const area = document.getElementById("chatMensagens");
+ const area = document.getElementById("chatMensagens");
 
-  area.innerHTML = mensagens
+const statusPorMensagem = {};
+
+conversasCache.forEach((c) => {
+  if (c.tipo === "status" && c.message_id) {
+    statusPorMensagem[c.message_id] = c.mensagem;
+  }
+});
+
+area.innerHTML = mensagens  
     .map((m) => {
       const classe = m.origem === "bot" ? "chat-bot" : "chat-cliente";
 
@@ -409,13 +417,6 @@ ${m.origem === "bot"
     .join("");
 
   area.scrollTop = area.scrollHeight;
-  const statusPorMensagem = {};
-
-conversasCache.forEach((c) => {
-  if (c.tipo === "status" && c.message_id) {
-    statusPorMensagem[c.message_id] = c.mensagem;
-  }
-});
 
   document.querySelectorAll(".chat-contact").forEach((el) => {
     el.classList.remove("active");
