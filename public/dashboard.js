@@ -383,7 +383,7 @@ function abrirConversa(telefone) {
   telefoneSelecionado = telefone;
 
   const mensagens = conversasCache
-    .filter((c) => c.telefone === telefone)
+  .filter((c) => c.telefone === telefone && c.tipo !== "status")
     .sort((a, b) => new Date(a.data) - new Date(b.data));
 
   const nome = mensagens[mensagens.length - 1]?.nome || "Cliente";
