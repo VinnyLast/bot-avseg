@@ -51,7 +51,7 @@ function adicionarLog(caminho, item) {
     data: new Date().toISOString(),
   });
 
-  salvarJson(caminho, logs.slice(0, 1000));
+  salvarJson(caminho, logs.slice(0, 5000));
 }
 
 const app = express();
