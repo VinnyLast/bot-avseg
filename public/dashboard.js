@@ -309,35 +309,53 @@ let telefoneSelecionado = null;
 async function carregarConversas() {
   conversasCache = await apiGet("/dashboard/conversas");
 
+  const nomesPorTelefone = {};
+
+  // Primeiro: descobre o melhor nome de cada telefone
+  conversasCache.forEach((c) => {
+    const telefone = c.telefone;
+    if (!telefone) return;
+
+    const nomeValido =
+      c.nome &&
+      c.nome !== "Cliente" &&
+      c.nome !== "Associado" &&
+      c.tipo !== "status";
+
+    if (nomeValido) {
+      nomesPorTelefone[telefone] = c.nome;
+    }
+  });
+
   const grupos = {};
 
-  conversasCache.forEach((c) => {
-    const telefone = c.telefone || "sem_telefone";
+  // Depois: cria a lista ignorando status como mensagem principal
+  conversasCache
+    .filter((c) => c.telefone && c.tipo !== "status")
+    .forEach((c) => {
+      const telefone = c.telefone;
 
-    if (!grupos[telefone]) {
-      grupos[telefone] = {
-        telefone,
-        nome: c.nome || "Cliente",
-        ultimaData: c.data,
-        ultimaMensagem: c.mensagem || "-",
-        mensagens: [],
-      };
-    }
+      if (!grupos[telefone]) {
+        grupos[telefone] = {
+          telefone,
+          nome: nomesPorTelefone[telefone] || c.nome || "Cliente",
+          ultimaData: c.data,
+          ultimaMensagem: c.mensagem || "-",
+          mensagens: [],
+        };
+      }
 
-    grupos[telefone].mensagens.push(c);
+      grupos[telefone].mensagens.push(c);
 
-    if (new Date(c.data) > new Date(grupos[telefone].ultimaData)) {
-  grupos[telefone].ultimaData = c.data;
+      if (new Date(c.data) > new Date(grupos[telefone].ultimaData)) {
+        grupos[telefone].ultimaData = c.data;
+        grupos[telefone].ultimaMensagem = c.mensagem || "-";
+      }
 
-  if (c.tipo !== "status") {
-    grupos[telefone].ultimaMensagem = c.mensagem || "-";
-  }
-
-  if (c.tipo !== "status" && c.nome && c.nome !== "Cliente") {
-    grupos[telefone].nome = c.nome;
-  }
-}
-  });
+      if (nomesPorTelefone[telefone]) {
+        grupos[telefone].nome = nomesPorTelefone[telefone];
+      }
+    });
 
   const lista = Object.values(grupos).sort(
     (a, b) => new Date(b.ultimaData) - new Date(a.ultimaData)
@@ -382,7 +400,13 @@ function abrirConversa(telefone) {
     .sort((a, b) => new Date(a.data) - new Date(b.data));
 
   const nome =
-  mensagens.find((m) => m.nome && m.nome !== "Cliente")?.nome || "Cliente";
+  mensagens.find(
+    (m) =>
+      m.nome &&
+      m.nome !== "Cliente" &&
+      m.nome !== "Associado" &&
+      m.tipo !== "status"
+  )?.nome || "Cliente";
 
   document.getElementById("chatHeader").textContent = `${nome} - ${telefone}`;
 
