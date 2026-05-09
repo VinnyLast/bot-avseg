@@ -1,4 +1,12 @@
-const API_KEY = prompt("Digite a chave interna do dashboard:");
+let API_KEY = localStorage.getItem("dashboard_api_key");
+
+if (!API_KEY) {
+  API_KEY = prompt("Digite a chave interna do dashboard:");
+
+  if (API_KEY) {
+    localStorage.setItem("dashboard_api_key", API_KEY);
+  }
+}
 
 let graficoAvaliacoes;
 let graficoNotificacoes;
