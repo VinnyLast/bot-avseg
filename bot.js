@@ -1514,9 +1514,8 @@ function ehDiaDePico() {
 if (ENABLE_CRON) {
   cron.schedule("0 11-23,0-1 * * *", async () => {
   if (!ehDiaDePico()) {
-    console.log("📅 Dia sem pico — pulando consultas pesadas.");
-    return;
-  }
+  console.log("📅 Dia sem pico — mantendo envio normal com limite por hora.");
+}
   
   console.log("⏰ Iniciando rotina de notificações diárias...");
     const http = axiosInterno();

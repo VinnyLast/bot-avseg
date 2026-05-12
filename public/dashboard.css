@@ -385,7 +385,9 @@ word-break: break-word;
 .chat-media {
   margin-bottom: 8px;
 }
-
+.chat-media img {
+  cursor: zoom-in;
+}
 .chat-media img {
   max-width: 260px;
   max-height: 260px;

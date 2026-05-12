@@ -385,13 +385,15 @@ async function carregarConversas() {
 function renderizarMidia(m) {
   if (!m.mediaUrl) return "";
 
-  if (m.mimeType?.startsWith("image/")) {
-    return `
-      <div class="chat-media">
-        <img src="${m.mediaUrl}" alt="${m.filename || "imagem"}" />
-      </div>
-    `;
-  }
+ if (m.mimeType?.startsWith("image/")) {
+  return `
+    <div class="chat-media">
+      <a href="${m.mediaUrl}" target="_blank" rel="noopener noreferrer">
+        <img src="${m.mediaUrl}" alt="${m.filename || "imagem"}" title="Clique para abrir" />
+      </a>
+    </div>
+  `;
+}
 
   if (m.mimeType?.startsWith("audio/")) {
     return `
