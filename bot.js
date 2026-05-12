@@ -96,9 +96,33 @@ function delay(ms) {
 function estaEmHorarioAtendimento() {
   const agora = new Date();
 
-  // Ajuste UTC-3 Brasil/Bahia
+  // Ajuste Brasil/Bahia UTC-3
   const horaBrasil = (agora.getUTCHours() - 3 + 24) % 24;
 
+  // Dia da semana em UTC ajustado para Brasil
+  const dataBrasil = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
+  const diaSemana = dataBrasil.getUTCDay();
+
+  // getUTCDay():
+  // 0 = domingo
+  // 1 = segunda
+  // 2 = terça
+  // 3 = quarta
+  // 4 = quinta
+  // 5 = sexta
+  // 6 = sábado
+
+  // Domingo fechado
+  if (diaSemana === 0) {
+    return false;
+  }
+
+  // Sábado: 08:00 às 12:00
+  if (diaSemana === 6) {
+    return horaBrasil >= 8 && horaBrasil < 12;
+  }
+
+  // Segunda a sexta: 08:00 às 18:00
   return horaBrasil >= 8 && horaBrasil < 18;
 }
 function carregarJson(caminho, padrao) {
@@ -1319,12 +1343,19 @@ Fico à disposição em caso de dúvidas!`,
   // 5 — Falar com atendente (cria conversa no Chatwoot)
   if (texto === "5") {
     if (!estaEmHorarioAtendimento()) {
-  await enviarTextoCanal(
-    from,
-    `⏰ *Atendimento humano indisponível no momento.*\n\nNosso horário de atendimento é de *08:00 às 18:00*.\n\nDigite *menu* para acessar as opções automáticas.`,
-    contexto,
-  );
-  return;
+ await enviarTextoCanal(
+  from,
+  `⏰ *Atendimento humano indisponível no momento.*
+
+Nosso horário de atendimento é:
+
+🗓️ *Segunda a sexta:* 08:00 às 18:00
+🗓️ *Sábado:* 08:00 às 12:00
+🚫 *Domingo:* fechado
+
+Digite *menu* para acessar as opções automáticas.`,
+  contexto,
+);
 }
     modoHumano.add(from);
     estadoUsuario[from] = null;
