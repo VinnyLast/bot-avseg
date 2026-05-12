@@ -685,6 +685,49 @@ async function enviarAnexoClienteChatwoot(conversationId, message) {
     );
   }
 }
+async function espelharMensagemNoChatwoot({
+  from,
+  bodyText,
+  msgType = "text",
+  message = null,
+}) {
+  if (!temChatwootConfigurado()) return null;
+
+  try {
+    let convId = obterUltimoCanal(from)?.conversationId;
+
+    if (!convId) {
+      convId = await criarConversaChatwoot(from, "Associado");
+
+      if (convId) {
+        atualizarUltimoCanal(from, {
+          origem: "meta",
+          conversationId: convId,
+        });
+      }
+    }
+
+    if (!convId) return null;
+
+    if (msgType === "text") {
+      await enviarMensagemClienteChatwoot(convId, bodyText);
+    } else {
+      await enviarAnexoClienteChatwoot(convId, message);
+
+      if (bodyText) {
+        await enviarMensagemClienteChatwoot(convId, bodyText);
+      }
+    }
+
+    return convId;
+  } catch (erro) {
+    console.error(
+      "❌ Erro ao espelhar mensagem no Chatwoot:",
+      erro.response?.data || erro.message,
+    );
+    return null;
+  }
+}
 async function abrirConversaHumanaChatwoot(conversationId) {
   if (!temChatwootConfigurado() || !conversationId) return;
 
@@ -1103,67 +1146,49 @@ async function processarMensagem({
     .trim();
   const http = axiosInterno();
   const contexto = { origem, conversationId };
+  // Espelha TODA mensagem recebida pelo WhatsApp no Chatwoot,
+// mesmo sem atendimento humano ativo.
+let conversationIdChatwoot = conversationId;
+
+if (origem === "meta" && temChatwootConfigurado()) {
+  conversationIdChatwoot = await espelharMensagemNoChatwoot({
+    from,
+    bodyText,
+    msgType,
+    message,
+  });
+
+  if (conversationIdChatwoot) {
+    contexto.conversationId = conversationIdChatwoot;
+  }
+}
 
   // 0. Modo humano — bot silencioso até o cliente pedir menu
   // 0. Modo humano — bot silencioso, mas encaminha mensagens para o Chatwoot
   if (modoHumano.has(from)) {
-    const canal = obterUltimoCanal(from);
-    let convId = conversationId || canal?.conversationId;
+  const canal = obterUltimoCanal(from);
+  const convId = conversationIdChatwoot || conversationId || canal?.conversationId;
 
-    // Cliente pediu para voltar ao bot
-    if (texto.trim().toLowerCase() === "menu") {
-      modoHumano.delete(from);
-      estadoUsuario[from] = null;
+  if (texto.trim().toLowerCase() === "menu") {
+    modoHumano.delete(from);
+    estadoUsuario[from] = null;
 
-      if (convId) await marcarConversaResolvidaChatwoot(convId);
+    if (convId) await marcarConversaResolvidaChatwoot(convId);
 
-      let cliente = null;
-      try {
-        const resposta = await http.post("/clienteTelefone", {
-          telefone: from,
-        });
-        cliente = resposta.data;
-      } catch (_) {}
+    let cliente = null;
+    try {
+      const resposta = await http.post("/clienteTelefone", {
+        telefone: from,
+      });
+      cliente = resposta.data;
+    } catch (_) {}
 
-      await enviarMenu(from, cliente, contexto);
-      return;
-    }
-
-    // Cliente mandou mensagem enquanto está em atendimento humano
-    if (temChatwootConfigurado()) {
-      try {
-        if (!convId) {
-          convId = await criarConversaChatwoot(from, "Associado");
-
-          if (convId) {
-            atualizarUltimoCanal(from, {
-              origem: "meta",
-              conversationId: convId,
-            });
-          }
-        }
-
-        if (convId) {
-  if (msgType === "text") {
-    await enviarMensagemClienteChatwoot(convId, bodyText);
-  } else {
-    await enviarAnexoClienteChatwoot(convId, message);
-
-    if (bodyText) {
-      await enviarMensagemClienteChatwoot(convId, bodyText);
-    }
-  }
-}
-      } catch (erro) {
-        console.error(
-          "❌ Erro ao encaminhar mensagem do cliente para Chatwoot:",
-          erro.response?.data || erro.message,
-        );
-      }
-    }
-
+    await enviarMenu(from, cliente, contexto);
     return;
   }
+
+  return;
+}
 
   // 1. Fluxo avaliação
   if (estadoUsuario[from] === "avaliacao") {
@@ -1489,12 +1514,37 @@ app.on("chatwoot_message", async ({ from, bodyText, conversationId, raw }) => {
     contactId: raw?.sender?.id || raw?.contact?.id || null,
   });
 
-  await processarMensagem({
-    from,
-    bodyText,
-    origem: "chatwoot",
-    conversationId,
-  });
+  if (!modoHumano.has(from)) {
+    console.log(
+      `⏭️ Mensagem do Chatwoot ignorada: ${from} não está em atendimento humano.`,
+    );
+    return;
+  }
+
+  if (!bodyText || !String(bodyText).trim()) {
+    console.log("⏭️ Mensagem vazia do Chatwoot ignorada.");
+    return;
+  }
+
+  try {
+    await enviarTexto(from, bodyText);
+
+    registrarLogConversa({
+      telefone: from,
+      nome: "Atendente",
+      origem: "atendente",
+      tipo: "text",
+      mensagem: bodyText,
+      conversationId,
+    });
+
+    console.log(`✅ Mensagem do atendente enviada para WhatsApp: ${from}`);
+  } catch (erro) {
+    console.error(
+      "❌ Erro ao enviar mensagem do Chatwoot para WhatsApp:",
+      erro.response?.data || erro.message,
+    );
+  }
 });
 
 // =============================================================================
