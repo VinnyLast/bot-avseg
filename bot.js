@@ -1356,6 +1356,7 @@ Nosso horário de atendimento é:
 Digite *menu* para acessar as opções automáticas.`,
   contexto,
 );
+ return;
 }
     modoHumano.add(from);
     estadoUsuario[from] = null;
