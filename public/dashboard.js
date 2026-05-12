@@ -382,6 +382,39 @@ async function carregarConversas() {
     abrirConversa(telefoneSelecionado);
   }
 }
+function renderizarMidia(m) {
+  if (!m.mediaUrl) return "";
+
+  if (m.mimeType?.startsWith("image/")) {
+    return `
+      <div class="chat-media">
+        <img src="${m.mediaUrl}" alt="${m.filename || "imagem"}" />
+      </div>
+    `;
+  }
+
+  if (m.mimeType?.startsWith("audio/")) {
+    return `
+      <div class="chat-media">
+        <audio controls src="${m.mediaUrl}"></audio>
+      </div>
+    `;
+  }
+
+  if (m.mimeType?.startsWith("video/")) {
+    return `
+      <div class="chat-media">
+        <video controls src="${m.mediaUrl}"></video>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="chat-file">
+      📎 <a href="${m.mediaUrl}" target="_blank">${m.filename || "Abrir anexo"}</a>
+    </div>
+  `;
+}
 function renderizarStatus(status) {
   if (!status) return "";
 
@@ -425,14 +458,15 @@ area.innerHTML = mensagens
       const classe = m.origem === "bot" ? "chat-bot" : "chat-cliente";
 
       return `
-        <div class="chat-bubble ${classe}">
-          ${m.mensagem || "-"}
-${m.origem === "bot"
-  ? renderizarStatus(statusPorMensagem[m.message_id] || m.status)
-  : ""}
-          <span class="chat-date">${formatarData(m.data)} • ${m.origem || "-"}</span>
-        </div>
-      `;
+  <div class="chat-bubble ${classe}">
+    ${renderizarMidia(m)}
+    ${m.mensagem || "-"}
+    ${m.origem === "bot"
+      ? renderizarStatus(statusPorMensagem[m.message_id] || m.status)
+      : ""}
+    <span class="chat-date">${formatarData(m.data)} • ${m.origem || "-"}</span>
+  </div>
+`;
     })
     .join("");
 

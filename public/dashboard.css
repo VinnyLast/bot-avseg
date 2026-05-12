@@ -382,6 +382,36 @@ word-break: break-word;
 .msg-status.failed {
   color: #ff6b6b;
 }
+.chat-media {
+  margin-bottom: 8px;
+}
+
+.chat-media img {
+  max-width: 260px;
+  max-height: 260px;
+  border-radius: 12px;
+  display: block;
+}
+
+.chat-media audio,
+.chat-media video {
+  max-width: 280px;
+  width: 100%;
+  border-radius: 12px;
+}
+
+.chat-file {
+  background: rgba(255, 255, 255, 0.12);
+  padding: 10px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+
+.chat-file a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
 
 @media (max-width: 768px) {
   .mini-chat {

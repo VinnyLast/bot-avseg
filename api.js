@@ -13,6 +13,9 @@ const ARQUIVO_LOG_AVALIACOES = path.join(__dirname, "logs_avaliacoes.json");
 const ARQUIVO_OPTOUT = path.join(__dirname, "usuarios_optout.json");
 const ARQUIVO_ENVIOS = path.join(__dirname, "envios_templates.json");
 const ARQUIVO_LOG_CONVERSAS = path.join(__dirname, "logs_conversas.json");
+const PASTA_UPLOADS_WHATSAPP = path.join(__dirname, "public", "uploads-whatsapp");
+
+fs.mkdirSync(PASTA_UPLOADS_WHATSAPP, { recursive: true });
 
 function registrarLogConversa(item) {
   adicionarLog(ARQUIVO_LOG_CONVERSAS, item);
@@ -57,7 +60,122 @@ function adicionarLog(caminho, item) {
 
   salvarJson(caminho, logs.slice(0, 5000));
 }
+function limparNomeArquivo(nome) {
+  return String(nome || "arquivo")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .slice(0, 80);
+}
 
+function extensaoPorMime(mimeType) {
+  if (mimeType?.includes("jpeg")) return ".jpg";
+  if (mimeType?.includes("png")) return ".png";
+  if (mimeType?.includes("webp")) return ".webp";
+  if (mimeType?.includes("pdf")) return ".pdf";
+  if (mimeType?.includes("ogg")) return ".ogg";
+  if (mimeType?.includes("mpeg")) return ".mp3";
+  if (mimeType?.includes("mp4")) return ".mp4";
+  return "";
+}
+
+function extrairMidiaMensagem(message) {
+  if (!message) return null;
+
+  if (message.type === "image") {
+    return {
+      mediaId: message.image?.id,
+      mimeType: message.image?.mime_type || "image/jpeg",
+      filename: `imagem_${Date.now()}.jpg`,
+      legenda: message.image?.caption || "",
+    };
+  }
+
+  if (message.type === "document") {
+    return {
+      mediaId: message.document?.id,
+      mimeType: message.document?.mime_type || "application/octet-stream",
+      filename: message.document?.filename || `documento_${Date.now()}`,
+      legenda: message.document?.caption || "",
+    };
+  }
+
+  if (message.type === "audio") {
+    return {
+      mediaId: message.audio?.id,
+      mimeType: message.audio?.mime_type || "audio/ogg",
+      filename: `audio_${Date.now()}.ogg`,
+      legenda: "",
+    };
+  }
+
+  if (message.type === "video") {
+    return {
+      mediaId: message.video?.id,
+      mimeType: message.video?.mime_type || "video/mp4",
+      filename: `video_${Date.now()}.mp4`,
+      legenda: message.video?.caption || "",
+    };
+  }
+
+  return null;
+}
+
+async function salvarMidiaWhatsappParaDashboard(message) {
+  const midia = extrairMidiaMensagem(message);
+
+  if (!midia?.mediaId) return null;
+
+  try {
+    const info = await axios.get(
+      `https://graph.facebook.com/v25.0/${midia.mediaId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${WA_TOKEN}`,
+        },
+        timeout: 15000,
+      },
+    );
+
+    const mediaUrl = info.data?.url;
+    const mimeType = info.data?.mime_type || midia.mimeType;
+
+    if (!mediaUrl) return null;
+
+    const arquivo = await axios.get(mediaUrl, {
+      headers: {
+        Authorization: `Bearer ${WA_TOKEN}`,
+      },
+      responseType: "arraybuffer",
+      timeout: 30000,
+    });
+
+    let filename = limparNomeArquivo(midia.filename);
+
+    if (!path.extname(filename)) {
+      filename += extensaoPorMime(mimeType);
+    }
+
+    const nomeFinal = `${Date.now()}_${filename}`;
+    const caminhoFinal = path.join(PASTA_UPLOADS_WHATSAPP, nomeFinal);
+
+    fs.writeFileSync(caminhoFinal, Buffer.from(arquivo.data));
+
+    return {
+      mediaUrl: `/uploads-whatsapp/${nomeFinal}`,
+      mimeType,
+      filename,
+      legenda: midia.legenda || "",
+    };
+  } catch (erro) {
+    console.error(
+      "❌ Erro ao salvar mídia no dashboard:",
+      erro.response?.data || erro.message,
+    );
+
+    return null;
+  }
+}
 const app = express();
 app.use(express.static("public"));
 app.use(express.json({ limit: "1mb" }));
@@ -204,7 +322,7 @@ app.get("/webhook", (req, res) => {
 // =============================================================================
 // WEBHOOK E CHATWOOT— recebimento de mensagens (POST)
 // =============================================================================
-app.post("/webhook", (req, res) => {
+app.post("/webhook", async (req, res) => {
   const status =
   req.body?.entry?.[0]?.changes?.[0]?.value?.statuses?.[0]?.status;
 
@@ -241,13 +359,22 @@ if (!value?.messages?.length) return;
   const from = normalizarTelefoneBR(message.from);
   const msgType = message.type;
   const bodyText = message.text?.body?.trim() || "";
-  registrarLogConversa({
-    telefone: from,
-    nome: value?.contacts?.[0]?.profile?.name || "Cliente",
-    origem: "cliente",
-    tipo: msgType,
-    mensagem: bodyText || `[${msgType}]`,
-  });
+const midiaDashboard = await salvarMidiaWhatsappParaDashboard(message);
+
+registrarLogConversa({
+  telefone: from,
+  nome: value?.contacts?.[0]?.profile?.name || "Cliente",
+  origem: "cliente",
+  tipo: msgType,
+  mensagem:
+    bodyText ||
+    midiaDashboard?.legenda ||
+    midiaDashboard?.filename ||
+    `[${msgType}]`,
+  mediaUrl: midiaDashboard?.mediaUrl || null,
+  mimeType: midiaDashboard?.mimeType || null,
+  filename: midiaDashboard?.filename || null,
+});
   if (!from) {
     console.warn("⚠️ Número inválido recebido no webhook");
     return;
