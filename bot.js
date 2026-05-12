@@ -1071,6 +1071,8 @@ async function processarMensagem({
   bodyText,
   origem = "meta",
   conversationId = null,
+  msgType = "text",
+  message = null,
 }) {
   const texto = String(bodyText || "")
     .toLowerCase()
@@ -1118,8 +1120,16 @@ async function processarMensagem({
         }
 
         if (convId) {
-          await enviarMensagemClienteChatwoot(convId, bodyText);
-        }
+  if (msgType === "text") {
+    await enviarMensagemClienteChatwoot(convId, bodyText);
+  } else {
+    await enviarAnexoClienteChatwoot(convId, message);
+
+    if (bodyText) {
+      await enviarMensagemClienteChatwoot(convId, bodyText);
+    }
+  }
+}
       } catch (erro) {
         console.error(
           "❌ Erro ao encaminhar mensagem do cliente para Chatwoot:",
@@ -1426,13 +1436,13 @@ if (ehRespostaNatural) {
 // =============================================================================
 // EVENTOS — META
 // =============================================================================
-app.on("wa_message", async ({ from, bodyText }) => {
-  atualizarUltimoCanal(from, { origem: "meta" });
+app.on("wa_message", async ({ from, bodyText, msgType, message }) => {
   await processarMensagem({
     from,
     bodyText,
     origem: "meta",
-    conversationId: null,
+    msgType,
+    message,
   });
 });
 
