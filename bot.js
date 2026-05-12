@@ -525,7 +525,142 @@ async function enviarMensagemClienteChatwoot(conversationId, texto) {
     );
   }
 }
+async function baixarMidiaMeta(mediaId) {
+  if (!mediaId) return null;
 
+  try {
+    // 1. Busca URL temporária da mídia
+    const metaInfo = await axios.get(
+      `https://graph.facebook.com/v25.0/${mediaId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+        },
+        timeout: 15000,
+      },
+    );
+
+    const mediaUrl = metaInfo.data?.url;
+    const mimeType = metaInfo.data?.mime_type || "application/octet-stream";
+
+    if (!mediaUrl) return null;
+
+    // 2. Baixa o arquivo
+    const arquivo = await axios.get(mediaUrl, {
+      headers: {
+        Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+      },
+      responseType: "arraybuffer",
+      timeout: 30000,
+    });
+
+    return {
+      buffer: Buffer.from(arquivo.data),
+      mimeType,
+    };
+  } catch (erro) {
+    console.error(
+      "❌ Erro ao baixar mídia da Meta:",
+      erro.response?.data || erro.message,
+    );
+    return null;
+  }
+}
+
+function obterMidiaDaMensagem(message) {
+  if (!message) return null;
+
+  if (message.type === "image") {
+    return {
+      mediaId: message.image?.id,
+      mimeType: message.image?.mime_type || "image/jpeg",
+      filename: `imagem_${Date.now()}.jpg`,
+      legenda: message.image?.caption || "",
+    };
+  }
+
+  if (message.type === "document") {
+    return {
+      mediaId: message.document?.id,
+      mimeType: message.document?.mime_type || "application/octet-stream",
+      filename: message.document?.filename || `documento_${Date.now()}`,
+      legenda: message.document?.caption || "",
+    };
+  }
+
+  if (message.type === "audio") {
+    return {
+      mediaId: message.audio?.id,
+      mimeType: message.audio?.mime_type || "audio/ogg",
+      filename: `audio_${Date.now()}.ogg`,
+      legenda: "",
+    };
+  }
+
+  if (message.type === "video") {
+    return {
+      mediaId: message.video?.id,
+      mimeType: message.video?.mime_type || "video/mp4",
+      filename: `video_${Date.now()}.mp4`,
+      legenda: message.video?.caption || "",
+    };
+  }
+
+  return null;
+}
+
+async function enviarAnexoClienteChatwoot(conversationId, message) {
+  if (!temChatwootConfigurado() || !conversationId || !message) return;
+
+  const midia = obterMidiaDaMensagem(message);
+
+  if (!midia?.mediaId) return;
+
+  const baixado = await baixarMidiaMeta(midia.mediaId);
+
+  if (!baixado?.buffer) return;
+
+  try {
+    const FormData = require("form-data");
+    const form = new FormData();
+
+    form.append("message_type", "incoming");
+    form.append("private", "false");
+    form.append("content", midia.legenda || `[${message.type}]`);
+    form.append(
+      "attachments[]",
+      baixado.buffer,
+      {
+        filename: midia.filename,
+        contentType: midia.mimeType || baixado.mimeType,
+      },
+    );
+
+    const url = `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/messages`;
+
+    const response = await axios.post(url, form, {
+      headers: {
+        api_access_token: CHATWOOT_API_TOKEN,
+        ...form.getHeaders(),
+      },
+      timeout: 60000,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    });
+
+    console.log(
+      `✅ Anexo enviado ao Chatwoot conv=${conversationId}:`,
+      response.data?.id || "ok",
+    );
+
+    return response.data;
+  } catch (erro) {
+    console.error(
+      "❌ Erro ao enviar anexo para Chatwoot:",
+      erro.response?.data || erro.message,
+    );
+  }
+}
 async function abrirConversaHumanaChatwoot(conversationId) {
   if (!temChatwootConfigurado() || !conversationId) return;
 
