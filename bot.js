@@ -690,6 +690,7 @@ async function espelharMensagemNoChatwoot({
   bodyText,
   msgType = "text",
   message = null,
+  nomeCliente = "Cliente",
 }) {
   if (!temChatwootConfigurado()) return null;
 
@@ -697,7 +698,7 @@ async function espelharMensagemNoChatwoot({
     let convId = obterUltimoCanal(from)?.conversationId;
 
     if (!convId) {
-      convId = await criarConversaChatwoot(from, "Associado");
+      convId = await criarConversaChatwoot(from, nomeCliente || "Cliente");
 
       if (convId) {
         atualizarUltimoCanal(from, {
@@ -1171,6 +1172,7 @@ async function processarMensagem({
   conversationId = null,
   msgType = "text",
   message = null,
+  nomeCliente = "Cliente",
 }) {
   const texto = String(bodyText || "")
     .toLowerCase()
@@ -1183,11 +1185,12 @@ let conversationIdChatwoot = conversationId;
 
 if (origem === "meta" && temChatwootConfigurado()) {
   conversationIdChatwoot = await espelharMensagemNoChatwoot({
-    from,
-    bodyText,
-    msgType,
-    message,
-  });
+  from,
+  bodyText,
+  msgType,
+  message,
+  nomeCliente,
+});
 
   if (conversationIdChatwoot) {
     contexto.conversationId = conversationIdChatwoot;
@@ -1554,14 +1557,15 @@ if (ehRespostaNatural) {
 // =============================================================================
 // EVENTOS — META
 // =============================================================================
-app.on("wa_message", async ({ from, bodyText, msgType, message }) => {
+app.on("wa_message", async ({ from, bodyText, msgType, message, nomeCliente }) => {
   await processarMensagem({
-    from,
-    bodyText,
-    origem: "meta",
-    msgType,
-    message,
-  });
+  from,
+  bodyText,
+  origem: "meta",
+  msgType,
+  message,
+  nomeCliente,
+});
 });
 
 // =============================================================================

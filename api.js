@@ -382,7 +382,14 @@ registrarLogConversa({
 
   console.log(`📩 Mensagem de ${from} [${msgType}]`);
 
-  app.emit("wa_message", { from, bodyText, msgType, message, value });
+  app.emit("wa_message", {
+  from,
+  bodyText,
+  msgType,
+  message,
+  value,
+  nomeCliente: value?.contacts?.[0]?.profile?.name || "Cliente",
+});
 });
 app.post("/chatwoot-bot", async (req, res) => {
   try {
