@@ -411,8 +411,13 @@ function montarHeadersChatwoot() {
 // =============================================================================
 // CHATWOOT — API
 // =============================================================================
-async function criarOuBuscarContatoChatwoot(telefone, nome = "Associado") {
+async function criarOuBuscarContatoChatwoot(telefone, nome = "Cliente") {
   if (!temChatwootConfigurado()) return null;
+
+  const nomeFinal =
+    nome && nome !== "Associado" && nome !== "Cliente"
+      ? nome
+      : "Cliente";
 
   // Tenta encontrar contato existente
   try {
@@ -424,10 +429,43 @@ async function criarOuBuscarContatoChatwoot(telefone, nome = "Associado") {
         timeout: 10000,
       },
     );
+
     const contatos = busca.data?.payload || [];
+
     if (contatos.length > 0) {
-      console.log(`🔍 Contato encontrado no Chatwoot: ${contatos[0].id}`);
-      return contatos[0].id;
+      const contato = contatos[0];
+
+      console.log(`🔍 Contato encontrado no Chatwoot: ${contato.id}`);
+
+      // Atualiza o nome se veio nome real do WhatsApp
+      if (
+        nomeFinal &&
+        nomeFinal !== "Cliente" &&
+        contato.name !== nomeFinal
+      ) {
+        try {
+          await axios.put(
+            `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/contacts/${contato.id}`,
+            {
+              name: nomeFinal,
+              phone_number: `+${telefone}`,
+            },
+            {
+              headers: montarHeadersChatwoot(),
+              timeout: 10000,
+            },
+          );
+
+          console.log(`✅ Nome atualizado no Chatwoot: ${nomeFinal}`);
+        } catch (erroUpdate) {
+          console.error(
+            "⚠️ Contato encontrado, mas não consegui atualizar nome:",
+            erroUpdate.response?.data || erroUpdate.message,
+          );
+        }
+      }
+
+      return contato.id;
     }
   } catch (_) {}
 
@@ -435,9 +473,16 @@ async function criarOuBuscarContatoChatwoot(telefone, nome = "Associado") {
   try {
     const criado = await axios.post(
       `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/contacts`,
-      { name: nome, phone_number: `+${telefone}` },
-      { headers: montarHeadersChatwoot(), timeout: 10000 },
+      {
+        name: nomeFinal,
+        phone_number: `+${telefone}`,
+      },
+      {
+        headers: montarHeadersChatwoot(),
+        timeout: 10000,
+      },
     );
+
     console.log(`✅ Contato criado no Chatwoot: ${criado.data?.id}`);
     return criado.data?.id;
   } catch (erro) {
@@ -736,7 +781,7 @@ async function registrarAcaoClienteChatwoot(from, acao, conversationId = null) {
     let convId = conversationId || obterUltimoCanal(from)?.conversationId;
 
     if (!convId) {
-      convId = await criarConversaChatwoot(from, "Associado");
+      convId = await criarConversaChatwoot(from, nomeCliente || "Cliente");
 
       if (convId) {
         atualizarUltimoCanal(from, {
