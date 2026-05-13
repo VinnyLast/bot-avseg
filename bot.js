@@ -728,6 +728,37 @@ async function espelharMensagemNoChatwoot({
     return null;
   }
 }
+async function registrarAcaoClienteChatwoot(from, acao, conversationId = null) {
+  if (!temChatwootConfigurado()) return;
+
+  try {
+    let convId = conversationId || obterUltimoCanal(from)?.conversationId;
+
+    if (!convId) {
+      convId = await criarConversaChatwoot(from, "Associado");
+
+      if (convId) {
+        atualizarUltimoCanal(from, {
+          origem: "meta",
+          conversationId: convId,
+        });
+      }
+    }
+
+    if (!convId) return;
+
+    await enviarTextoChatwoot(
+      convId,
+      `🧭 *Ação identificada pelo bot*\n\n${acao}\n\n📱 Número: +${from}`,
+      true
+    );
+  } catch (erro) {
+    console.error(
+      "❌ Erro ao registrar ação do cliente no Chatwoot:",
+      erro.response?.data || erro.message
+    );
+  }
+}
 async function abrirConversaHumanaChatwoot(conversationId) {
   if (!temChatwootConfigurado() || !conversationId) return;
 
@@ -1295,6 +1326,11 @@ if (origem === "meta" && temChatwootConfigurado()) {
 
   // 5. Opções do menu
   if (texto === "1") {
+    await registrarAcaoClienteChatwoot(
+  from,
+  "Opção 1 - Cotação pelo Aplicativo AVSEG",
+  contexto.conversationId
+);
     await enviarTextoCanal(
       from,
       `📱 *Cotação pelo Aplicativo AVSEG*
@@ -1320,6 +1356,11 @@ Fico à disposição em caso de dúvidas!`,
   }
 
   if (texto === "2") {
+    await registrarAcaoClienteChatwoot(
+  from,
+  "Opção 2 - Pagamentos / 2ª via da participação mensal",
+  contexto.conversationId
+);
     estadoUsuario[from] = "pagamento";
     await enviarTextoCanal(
       from,
@@ -1330,6 +1371,11 @@ Fico à disposição em caso de dúvidas!`,
   }
 
   if (texto === "3") {
+    await registrarAcaoClienteChatwoot(
+  from,
+  "Opção 3 - Acionar Assistência 24h",
+  contexto.conversationId
+);
     estadoUsuario[from] = "assistencia";
     await enviarTextoCanal(
       from,
@@ -1341,10 +1387,15 @@ Fico à disposição em caso de dúvidas!`,
   }
 
   if (texto === "4") {
-    await enviarTextoCanal(
-      from,
-      `📱 *Vistoria pelo Aplicativo AVSEG*
+  await registrarAcaoClienteChatwoot(
+    from,
+    "Opção 4 - Vistoria pelo Aplicativo AVSEG",
+    contexto.conversationId
+  );
 
+  await enviarTextoCanal(
+    from,
+    `📱 *Vistoria pelo Aplicativo AVSEG*
 Segue o link do aplicativo AVSEG para download:
 
 🤖 Android:
@@ -1367,6 +1418,11 @@ Fico à disposição em caso de dúvidas!`,
 
   // 5 — Falar com atendente (cria conversa no Chatwoot)
   if (texto === "5") {
+    await registrarAcaoClienteChatwoot(
+  from,
+  "Opção 5 - Solicitou atendimento humano",
+  contexto.conversationId
+);
     if (!estaEmHorarioAtendimento()) {
  await enviarTextoCanal(
   from,
@@ -1427,6 +1483,11 @@ Digite *menu* para acessar as opções automáticas.`,
   }
 
   if (texto === "6") {
+    await registrarAcaoClienteChatwoot(
+  from,
+  "Opção 6 - Avaliação de atendimento",
+  contexto.conversationId
+);
     await iniciarAvaliacao(from, contexto);
     return;
   }
