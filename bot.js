@@ -788,7 +788,7 @@ async function registrarAcaoClienteChatwoot(from, acao, conversationId = null) {
     let convId = conversationId || obterUltimoCanal(from)?.conversationId;
 
     if (!convId) {
-      convId = await criarConversaChatwoot(from, nomeCliente || "Cliente");
+      convId = await criarConversaChatwoot(from, "Cliente");
 
       if (convId) {
         atualizarUltimoCanal(from, {
@@ -1510,7 +1510,7 @@ Digite *menu* para acessar as opções automáticas.`,
 
         if (!convId) {
           // Cria nova conversa no Chatwoot
-          convId = await criarConversaChatwoot(from, "Associado");
+          convId = await criarConversaChatwoot(from, nomeCliente || "Cliente");
         } else {
           await abrirConversaHumanaChatwoot(convId);
         }
