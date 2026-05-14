@@ -755,15 +755,22 @@ async function espelharMensagemNoChatwoot({
 
     if (!convId) return null;
 
-    if (msgType === "text") {
-      await enviarMensagemClienteChatwoot(convId, bodyText);
-    } else {
-      await enviarAnexoClienteChatwoot(convId, message);
+    const textoParaChatwoot =
+  bodyText && String(bodyText).trim()
+    ? bodyText
+    : `[${msgType || "mensagem"} recebida]`;
 
-      if (bodyText) {
-        await enviarMensagemClienteChatwoot(convId, bodyText);
-      }
-    }
+if (msgType === "text") {
+  await enviarMensagemClienteChatwoot(convId, textoParaChatwoot);
+} else {
+  const anexoEnviado = await enviarAnexoClienteChatwoot(convId, message);
+
+  if (!anexoEnviado) {
+    await enviarMensagemClienteChatwoot(convId, textoParaChatwoot);
+  } else if (bodyText && String(bodyText).trim()) {
+    await enviarMensagemClienteChatwoot(convId, bodyText);
+  }
+}
 
     return convId;
   } catch (erro) {
@@ -781,7 +788,7 @@ async function registrarAcaoClienteChatwoot(from, acao, conversationId = null) {
     let convId = conversationId || obterUltimoCanal(from)?.conversationId;
 
     if (!convId) {
-      convId = await criarConversaChatwoot(from, nomeCliente || "Cliente");
+      convId = await criarConversaChatwoot(from, "Cliente");
 
       if (convId) {
         atualizarUltimoCanal(from, {
