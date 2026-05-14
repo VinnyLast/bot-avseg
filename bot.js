@@ -788,7 +788,7 @@ async function registrarAcaoClienteChatwoot(from, acao, conversationId = null) {
     let convId = conversationId || obterUltimoCanal(from)?.conversationId;
 
     if (!convId) {
-      convId = await criarConversaChatwoot(from, "Cliente");
+      convId = await criarConversaChatwoot(from, nomeCliente || "Cliente");
 
       if (convId) {
         atualizarUltimoCanal(from, {
