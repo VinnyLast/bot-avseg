@@ -26,6 +26,46 @@ function criarBadgeStatus(status) {
 function criarBadgeTipo(tipo) {
   return `<span class="tipo-badge">${tipo || "-"}</span>`;
 }
+function hojeISO() {
+  const agora = new Date();
+  const ano = agora.getFullYear();
+  const mes = String(agora.getMonth() + 1).padStart(2, "0");
+  const dia = String(agora.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+function getDataFiltro() {
+  const input = document.getElementById("filtroData");
+  return input?.value || hojeISO();
+}
+
+function mesmaData(item, dataFiltro) {
+  return String(item?.data || "").startsWith(dataFiltro);
+}
+
+function contarPorTipo(notificacoes) {
+  return notificacoes.reduce((acc, n) => {
+    const tipo = n.tipo || "outros";
+    acc[tipo] = (acc[tipo] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function atualizarCardsNotificacoesDoDia(notificacoesDoDia) {
+  const resumo = contarPorTipo(notificacoesDoDia);
+
+  const setText = (id, valor) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = valor || 0;
+  };
+
+  setText("aniversariosDia", resumo.aniversario);
+  setText("cobranca4Dia", resumo.cobranca_4);
+  setText("cobranca15Dia", resumo.cobranca_15);
+  setText("lembrete2Dia", resumo.lembrete_2);
+  setText("lembrete5Dia", resumo.lembrete_5);
+}
+
 
 async function apiGet(url) {
   const resposta = await fetch(url, {
@@ -282,26 +322,41 @@ async function carregarNotificacoes() {
   const notificacoes = await apiGet("/dashboard/notificacoes");
   const tbody = document.getElementById("notificacoesTabela");
 
+  const dataFiltro = getDataFiltro();
+
+  const notificacoesDoDia = notificacoes.filter((n) =>
+    mesmaData(n, dataFiltro),
+  );
+
   document.getElementById("totalNotificacoes").textContent =
     notificacoes.length;
 
-  tbody.innerHTML = notificacoes
-  .map(
-    (n) => `
-    <tr>
-      <td>${(n.sistema || "-").toUpperCase()}</td>
-      <td>${formatarData(n.data)}</td>
-      <td>${n.nome || "-"}</td>
-      <td>${n.telefone || "-"}</td>
-      <td>${criarBadgeTipo(n.tipo || "-")}</td>
-      <td>${n.placa || "-"}</td>
-      <td>${n.vencimento || "-"}</td>
-    </tr>
-  `,
-)
-.join("");
+  const notificacoesHojeEl = document.getElementById("notificacoesHoje");
+  if (notificacoesHojeEl) {
+    notificacoesHojeEl.textContent = notificacoesDoDia.length;
+  }
 
-  montarGraficoNotificacoes(notificacoes);
+  atualizarCardsNotificacoesDoDia(notificacoesDoDia);
+
+  if (tbody) {
+    tbody.innerHTML = notificacoesDoDia
+      .map(
+        (n) => `
+        <tr>
+          <td>${(n.sistema || "-").toUpperCase()}</td>
+          <td>${formatarData(n.data)}</td>
+          <td>${n.nome || "-"}</td>
+          <td>${n.telefone || "-"}</td>
+          <td>${criarBadgeTipo(n.tipo || "-")}</td>
+          <td>${n.placa || "-"}</td>
+          <td>${n.vencimento || "-"}</td>
+        </tr>
+      `,
+      )
+      .join("");
+  }
+
+  montarGraficoNotificacoes(notificacoesDoDia);
 }
 let conversasCache = [];
 let telefoneSelecionado = null;
@@ -507,7 +562,25 @@ function configurarAbas() {
   });
 }
 
+function inicializarFiltroData() {
+  const input = document.getElementById("filtroData");
+  const botao = document.getElementById("btnAplicarData");
+
+  if (input && !input.value) {
+    input.value = hojeISO();
+  }
+
+  if (input) {
+    input.addEventListener("change", carregarTudo);
+  }
+
+  if (botao) {
+    botao.addEventListener("click", carregarTudo);
+  }
+}
+
 configurarAbas();
+inicializarFiltroData();
 
 carregarTudo();
 setInterval(carregarTudo, 10000);
