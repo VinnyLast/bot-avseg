@@ -1453,7 +1453,7 @@ app.get("/dashboard/consultas", protegerRotaInterna, (req, res) => {
 });
 
 app.get("/dashboard/notificacoes", protegerRotaInterna, (req, res) => {
-  res.json(carregarJson(ARQUIVO_LOG_NOTIFICACOES, []).slice(0, 100));
+  res.json(carregarJson(ARQUIVO_LOG_NOTIFICACOES, []).slice(0, 500));
 });
 
 app.get("/dashboard/optout", protegerRotaInterna, (req, res) => {
