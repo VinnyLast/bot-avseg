@@ -8,6 +8,7 @@ const path = require("path");
 const TEMPLATE_MAP = {
   lembrete_5: "lembrete_5_dias",
   lembrete_2: "lembrete_2_dia",
+  cobranca_3: "aviso_pendencia_3_dias",
   cobranca_4: "aviso_pendencia_4_dias",
   cobranca_15: "aviso_pendencia_15_dias",
   aniversario: "aniversario_cliente",

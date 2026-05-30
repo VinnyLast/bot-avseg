@@ -45,7 +45,6 @@ function registrarLogAvaliacao(item) {
       ...item,
       data: new Date().toISOString(),
     });
-
     salvarJson(ARQUIVO_LOG_AVALIACOES, logs.slice(0, 1000));
   } catch (erro) {
     console.error("❌ Erro ao registrar avaliação:", erro.message);
@@ -57,7 +56,6 @@ function adicionarLog(caminho, item) {
     ...item,
     data: new Date().toISOString(),
   });
-
   salvarJson(caminho, logs.slice(0, 5000));
 }
 function limparNomeArquivo(nome) {
@@ -130,9 +128,7 @@ async function salvarMidiaWhatsappParaDashboard(message) {
     const info = await axios.get(
       `https://graph.facebook.com/v25.0/${midia.mediaId}`,
       {
-        headers: {
-          Authorization: `Bearer ${WA_TOKEN}`,
-        },
+        headers: { Authorization: `Bearer ${WA_TOKEN}` },
         timeout: 15000,
       },
     );
@@ -143,9 +139,7 @@ async function salvarMidiaWhatsappParaDashboard(message) {
     if (!mediaUrl) return null;
 
     const arquivo = await axios.get(mediaUrl, {
-      headers: {
-        Authorization: `Bearer ${WA_TOKEN}`,
-      },
+      headers: { Authorization: `Bearer ${WA_TOKEN}` },
       responseType: "arraybuffer",
       timeout: 30000,
     });
@@ -172,10 +166,10 @@ async function salvarMidiaWhatsappParaDashboard(message) {
       "❌ Erro ao salvar mídia no dashboard:",
       erro.response?.data || erro.message,
     );
-
     return null;
   }
 }
+
 const app = express();
 app.use(express.static("public"));
 app.use(express.json({ limit: "1mb" }));
@@ -185,6 +179,7 @@ const PORT = Number(process.env.PORT || 10000);
 // ── Credenciais internas ──────────────────────────────────────────────────────
 const TOKEN_I9 = process.env.TOKEN_I9;
 const I9_BOLETO_URL = process.env.I9_BOLETO_URL;
+const I9_RELBOLETOS_URL = process.env.I9_RELBOLETOS_URL || "https://avsegboletos.i9app.inf.br/relboletos";
 const SOUTH_BASE_URL = process.env.SOUTH_BASE_URL;
 const SOUTH_TOKEN = process.env.SOUTH_TOKEN;
 
@@ -324,12 +319,12 @@ app.get("/webhook", (req, res) => {
 // =============================================================================
 app.post("/webhook", async (req, res) => {
   const status =
-  req.body?.entry?.[0]?.changes?.[0]?.value?.statuses?.[0]?.status;
+    req.body?.entry?.[0]?.changes?.[0]?.value?.statuses?.[0]?.status;
 
-const numero =
-  req.body?.entry?.[0]?.changes?.[0]?.value?.statuses?.[0]?.recipient_id;
+  const numero =
+    req.body?.entry?.[0]?.changes?.[0]?.value?.statuses?.[0]?.recipient_id;
 
-console.log(`📩 Webhook: ${status || "evento"} → ${numero || "ND"}`);
+  console.log(`📩 Webhook: ${status || "evento"} → ${numero || "ND"}`);
 
   res.sendStatus(200);
 
@@ -342,39 +337,40 @@ console.log(`📩 Webhook: ${status || "evento"} → ${numero || "ND"}`);
 
   const statusMeta = value?.statuses?.[0];
 
-if (statusMeta) {
-  registrarLogConversa({
-    telefone: normalizarTelefoneBR(statusMeta.recipient_id || ""),
-    nome: "Cliente",
-    origem: "status",
-    tipo: "status",
-    mensagem: statusMeta.status,
-    message_id: statusMeta.id,
-  });
-}
+  if (statusMeta) {
+    registrarLogConversa({
+      telefone: normalizarTelefoneBR(statusMeta.recipient_id || ""),
+      nome: "Cliente",
+      origem: "status",
+      tipo: "status",
+      mensagem: statusMeta.status,
+      message_id: statusMeta.id,
+    });
+  }
 
-if (!value?.messages?.length) return;
+  if (!value?.messages?.length) return;
 
   const message = value.messages[0];
   const from = normalizarTelefoneBR(message.from);
   const msgType = message.type;
   const bodyText = message.text?.body?.trim() || "";
-const midiaDashboard = await salvarMidiaWhatsappParaDashboard(message);
+  const midiaDashboard = await salvarMidiaWhatsappParaDashboard(message);
 
-registrarLogConversa({
-  telefone: from,
-  nome: value?.contacts?.[0]?.profile?.name || "Cliente",
-  origem: "cliente",
-  tipo: msgType,
-  mensagem:
-    bodyText ||
-    midiaDashboard?.legenda ||
-    midiaDashboard?.filename ||
-    `[${msgType}]`,
-  mediaUrl: midiaDashboard?.mediaUrl || null,
-  mimeType: midiaDashboard?.mimeType || null,
-  filename: midiaDashboard?.filename || null,
-});
+  registrarLogConversa({
+    telefone: from,
+    nome: value?.contacts?.[0]?.profile?.name || "Cliente",
+    origem: "cliente",
+    tipo: msgType,
+    mensagem:
+      bodyText ||
+      midiaDashboard?.legenda ||
+      midiaDashboard?.filename ||
+      `[${msgType}]`,
+    mediaUrl: midiaDashboard?.mediaUrl || null,
+    mimeType: midiaDashboard?.mimeType || null,
+    filename: midiaDashboard?.filename || null,
+  });
+
   if (!from) {
     console.warn("⚠️ Número inválido recebido no webhook");
     return;
@@ -383,14 +379,15 @@ registrarLogConversa({
   console.log(`📩 Mensagem de ${from} [${msgType}]`);
 
   app.emit("wa_message", {
-  from,
-  bodyText,
-  msgType,
-  message,
-  value,
-  nomeCliente: value?.contacts?.[0]?.profile?.name || "Cliente",
+    from,
+    bodyText,
+    msgType,
+    message,
+    value,
+    nomeCliente: value?.contacts?.[0]?.profile?.name || "Cliente",
+  });
 });
-});
+
 app.post("/chatwoot-bot", async (req, res) => {
   try {
     const body = req.body;
@@ -415,15 +412,9 @@ app.post("/chatwoot-bot", async (req, res) => {
 
     // Ignora notas privadas
     if (body.private === true || body.message?.private === true) {
-      return res.status(200).json({
-        ok: true,
-        ignored: "private_note",
-      });
+      return res.status(200).json({ ok: true, ignored: "private_note" });
     }
 
-    // Evita loop:
-    // mensagens incoming no Chatwoot são apenas o espelho do que já veio pela Meta.
-    // Se processar incoming aqui, ele manda de volta para o bot e cria repetição.
     if (messageType === "incoming") {
       return res.status(200).json({
         ok: true,
@@ -443,36 +434,18 @@ app.post("/chatwoot-bot", async (req, res) => {
     const telefone = normalizarTelefoneBR(phoneRaw);
 
     if (!telefone || !content) {
-      return res.status(200).json({
-        ok: true,
-        ignored: "sem telefone ou conteúdo",
-      });
+      return res.status(200).json({ ok: true, ignored: "sem telefone ou conteúdo" });
     }
 
-    // Mensagem do atendente no Chatwoot -> envia para WhatsApp
     if (messageType === "outgoing") {
       await enviarTexto(telefone, content);
-
-      return res.status(200).json({
-        ok: true,
-        sent_to_whatsapp: telefone,
-      });
+      return res.status(200).json({ ok: true, sent_to_whatsapp: telefone });
     }
 
-    return res.status(200).json({
-      ok: true,
-      ignored: `message_type ${messageType}`,
-    });
+    return res.status(200).json({ ok: true, ignored: `message_type ${messageType}` });
   } catch (erro) {
-    console.error(
-      "❌ Erro no webhook Chatwoot:",
-      erro.response?.data || erro.message,
-    );
-
-    return res.status(500).json({
-      ok: false,
-      erro: erro.message,
-    });
+    console.error("❌ Erro no webhook Chatwoot:", erro.response?.data || erro.message);
+    return res.status(500).json({ ok: false, erro: erro.message });
   }
 });
 
@@ -523,10 +496,7 @@ async function enviarImagem(to, imageUrl, caption = "") {
     );
     console.log(`✅ IMAGEM ENVIADA para ${to}:`, response.data);
   } catch (erro) {
-    console.error(
-      `❌ ERRO META (imagem):`,
-      erro.response?.data || erro.message,
-    );
+    console.error(`❌ ERRO META (imagem):`, erro.response?.data || erro.message);
   }
 }
 
@@ -645,23 +615,21 @@ async function consultarBoletoI9({ tipo, cpf, cnpj, placa }) {
 }
 
 // =============================================================================
-// I9 — BUSCA DE VENCIMENTOS PARA NOTIFICAÇÕES AUTOMÁTICAS
+// I9 — BUSCA EM LOTE VIA /relboletos (para notificações automáticas)
 // =============================================================================
 
 /**
- * Converte a data de vencimento do I9 (DD/MM/YYYY ou YYYY-MM-DD) para dayjs.
+ * Converte data DD/MM/YYYY para dayjs (formato retornado pelo /relboletos)
  */
 function parsearDataVencimentoI9(vencimento) {
   if (!vencimento || vencimento === "ND") return null;
   const texto = String(vencimento).trim();
 
-  // Formato DD/MM/YYYY (padrão retornado pelo I9)
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(texto)) {
     const [dia, mes, ano] = texto.split("/");
     return dayjs(`${ano}-${mes}-${dia}`);
   }
 
-  // Formato ISO YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
     return dayjs(texto);
   }
@@ -670,8 +638,78 @@ function parsearDataVencimentoI9(vencimento) {
 }
 
 /**
- * Dado um array de placas, consulta o I9 e retorna apenas os veículos
- * cujo vencimento bate com a dataAlvo.
+ * Consulta /relboletos com período de um único dia.
+ * tipo 1 = A Vencer | tipo 2 = Em Atraso
+ */
+async function i9BuscarVencimentosRelboletos(dataAlvo, tipoNotificacao) {
+  try {
+    const dataFormatada = dayjs(dataAlvo).format("YYYYMMDD");
+    const tipoI9 = tipoNotificacao.startsWith("cobranca") ? 2 : 1;
+
+    // Regra do manual:
+    // tipo 1 (A Vencer): inicio não pode ser data retroativa
+    // tipo 2 (Em Atraso): fim deve ser menor que hoje
+    // Como consultamos exatamente um dia, inicio = fim = dataAlvo
+    if (tipoI9 === 1 && dayjs(dataAlvo).isBefore(dayjs(), "day")) {
+      console.warn(`⚠️ I9 relboletos [${tipoNotificacao}]: data ${dataAlvo} é retroativa para tipo 1, pulando.`);
+      return [];
+    }
+
+    if (tipoI9 === 2 && !dayjs(dataAlvo).isBefore(dayjs(), "day")) {
+      console.warn(`⚠️ I9 relboletos [${tipoNotificacao}]: data ${dataAlvo} não é retroativa para tipo 2, pulando.`);
+      return [];
+    }
+
+    console.log(`🔍 I9 relboletos [${tipoNotificacao}]: consultando ${dataAlvo} (tipo ${tipoI9})`);
+
+    const resposta = await axios.post(
+      I9_RELBOLETOS_URL,
+      {
+        token: TOKEN_I9,
+        tipo: tipoI9,
+        inicio: dataFormatada,
+        fim: dataFormatada,
+      },
+      {
+        headers: { "Content-Type": "application/json" },
+        timeout: 30000,
+      },
+    );
+
+    const titulos = Array.isArray(resposta.data?.titulos)
+      ? resposta.data.titulos
+      : [];
+
+    console.log(`✅ I9 relboletos [${tipoNotificacao}]: ${titulos.length} título(s) retornado(s)`);
+
+    return titulos
+      .filter((t) => t.fone && String(t.fone).replace(/\D/g, "").length >= 10)
+      .map((t) => ({
+        nome: t.associado || "Associado",
+        telefone: normalizarTelefoneBR(t.fone || ""),
+        placa: t.placa || "ND",
+        vencimento: t.vencimento || "ND", // já vem DD/MM/YYYY
+        valor: t.valor || "ND",
+        url: t.url && t.url !== "ND" ? t.url : "ND",
+        linhadigitavel:
+          t.linhadigitavel && t.linhadigitavel !== "ND"
+            ? t.linhadigitavel
+            : "ND",
+        matricula: t.matricula || "ND",
+        tipo: tipoNotificacao,
+        sistema: "i9",
+      }));
+  } catch (erro) {
+    console.warn(
+      `⚠️ I9 relboletos [${tipoNotificacao}] — ${dataAlvo}:`,
+      erro.response?.data || erro.message,
+    );
+    return [];
+  }
+}
+
+/**
+ * Consulta placa a placa usando i9_placas.json (método legado mantido)
  */
 async function i9BuscarVencimentosPorPlacas(placas, dataAlvo, tipoNotificacao) {
   const dataAlvoDayjs = dayjs(dataAlvo);
@@ -721,56 +759,61 @@ async function i9BuscarVencimentosPorPlacas(placas, dataAlvo, tipoNotificacao) {
   return resultados;
 }
 
-/**
- * Busca vencimentos no I9 para uma data-alvo.
- * Estratégia: obtém as placas pelo South (que já tem listagem por data)
- * e cruza com o I9 individualmente.
- */
 function carregarPlacasI9() {
   const placas = carregarJson(ARQUIVO_I9_PLACAS, []);
-
   if (!Array.isArray(placas)) return [];
-
   return [
     ...new Set(
       placas
         .map((p) => normalizarPlaca(p))
-        .filter(Boolean)
+        .filter(Boolean),
     ),
   ];
 }
+
+/**
+ * Função principal de vencimentos I9:
+ * 1. Busca em lote via /relboletos
+ * 2. Complementa com consulta placa a placa (i9_placas.json)
+ * 3. Merge sem duplicatas por placa + vencimento
+ */
 async function i9BuscarVencimentos(dataAlvo, tipoNotificacao) {
   try {
-    const placas = carregarPlacasI9();
+    // 1. Lote via /relboletos
+    const resultadosLote = await i9BuscarVencimentosRelboletos(dataAlvo, tipoNotificacao);
 
-    if (!placas.length) {
-      console.log(`ℹ️ I9 [${tipoNotificacao}]: nenhuma placa cadastrada em i9_placas.json`);
-      return [];
+    // 2. Placa a placa via i9_placas.json
+    const placas = carregarPlacasI9();
+    let resultadosPlaca = [];
+
+    if (placas.length > 0) {
+      console.log(`🔍 I9 placa a placa [${tipoNotificacao}]: ${placas.length} placa(s)`);
+      resultadosPlaca = await i9BuscarVencimentosPorPlacas(placas, dataAlvo, tipoNotificacao);
+    }
+
+    // 3. Merge sem duplicatas (chave: placa + vencimento)
+    const todos = [...resultadosLote];
+    const chaves = new Set(todos.map((r) => `${r.placa}|${r.vencimento}`));
+
+    for (const item of resultadosPlaca) {
+      const chave = `${item.placa}|${item.vencimento}`;
+      if (!chaves.has(chave)) {
+        chaves.add(chave);
+        todos.push(item);
+      }
     }
 
     console.log(
-      `🔍 I9 [${tipoNotificacao}]: consultando ${placas.length} placa(s) próprias — ${dataAlvo}`
+      `✅ I9 [${tipoNotificacao}] ${dataAlvo}: ${resultadosLote.length} lote + ${resultadosPlaca.length} placa a placa = ${todos.length} total`,
     );
 
-    const resultados = await i9BuscarVencimentosPorPlacas(
-      placas,
-      dataAlvo,
-      tipoNotificacao
-    );
-
-    console.log(
-      `✅ I9 [${tipoNotificacao}]: ${resultados.length} resultado(s)`
-    );
-
-    return resultados;
+    return todos;
   } catch (erro) {
-    console.error(
-      `❌ Erro i9BuscarVencimentos [${tipoNotificacao}]:`,
-      extrairErro(erro)
-    );
+    console.error(`❌ Erro i9BuscarVencimentos [${tipoNotificacao}]:`, extrairErro(erro));
     return [];
   }
 }
+
 // =============================================================================
 // SOUTH
 // =============================================================================
@@ -1127,7 +1170,6 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
           sistema: "i9",
           status: "encontrado",
         });
-
         return res.json({ sistema: "i9", ...resultadoI9 });
       }
       adicionarLog(ARQUIVO_LOG_CONSULTAS, {
@@ -1160,7 +1202,6 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
           sistema: "south",
           status: "encontrado",
         });
-
         return res.json({ sistema: "south", ...dadosSouth });
       }
       adicionarLog(ARQUIVO_LOG_CONSULTAS, {
@@ -1194,7 +1235,6 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
           sistema: "i9",
           status: "encontrado",
         });
-
         return res.json({ sistema: "i9", ...resultadoI9 });
       }
     } catch (erroI9) {
@@ -1213,7 +1253,6 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
         sistema: "south",
         status: "encontrado",
       });
-
       return res.json({ sistema: "south", ...dadosSouth });
     }
 
@@ -1240,20 +1279,16 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
     });
   }
 });
+
 // =============================================================================
 // ROTA /notificacoes-pendentes  (South + I9)
-// Fluxo:
-// - Lembrete 5 dias antes
-// - Lembrete 2 dias antes
-// - Cobrança 4 dias depois
-// - Cobrança 15 dias depois
-// - Parabéns no dia
 // =============================================================================
 app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
   const hoje = dayjs();
 
   const d5 = hoje.add(5, "day").format("YYYY-MM-DD");
   const d2 = hoje.add(2, "day").format("YYYY-MM-DD");
+  const atraso3 = hoje.subtract(3, "day").format("YYYY-MM-DD");
   const atraso4 = hoje.subtract(4, "day").format("YYYY-MM-DD");
   const atraso15 = hoje.subtract(15, "day").format("YYYY-MM-DD");
 
@@ -1263,11 +1298,13 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
 
       southList5,
       southList2,
+      southListAtraso3,
       southListAtraso4,
       southListAtraso15,
 
       i9List5,
       i9List2,
+      i9ListAtraso3,
       i9ListAtraso4,
       i9ListAtraso15,
     ] = await Promise.all([
@@ -1276,12 +1313,14 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
       // South
       southBuscarVencimentos(d5, "lembrete_5"),
       southBuscarVencimentos(d2, "lembrete_2"),
+      southBuscarVencimentos(atraso3, "cobranca_3"),
       southBuscarVencimentos(atraso4, "cobranca_4"),
       southBuscarVencimentos(atraso15, "cobranca_15"),
 
       // I9
       i9BuscarVencimentos(d5, "lembrete_5"),
       i9BuscarVencimentos(d2, "lembrete_2"),
+      i9BuscarVencimentos(atraso3, "cobranca_3"),
       i9BuscarVencimentos(atraso4, "cobranca_4"),
       i9BuscarVencimentos(atraso15, "cobranca_15"),
     ]);
@@ -1291,11 +1330,13 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
 
       ...southList5,
       ...southList2,
+      ...southListAtraso3,
       ...southListAtraso4,
       ...southListAtraso15,
 
       ...i9List5,
       ...i9List2,
+      ...i9ListAtraso3,
       ...i9ListAtraso4,
       ...i9ListAtraso15,
     ];
@@ -1306,7 +1347,6 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
 
     for (const item of validas) {
       const chave = `${item.tipo}-${item.telefone}-${item.placa || ""}-${item.vencimento || ""}`;
-
       if (!chaves.has(chave)) {
         chaves.add(chave);
         unicas.push(item);
@@ -1319,6 +1359,7 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
         hoje: hoje.format("YYYY-MM-DD"),
         lembrete_5: d5,
         lembrete_2: d2,
+        cobranca_3: atraso3,
         cobranca_4: atraso4,
         cobranca_15: atraso15,
       },
@@ -1327,12 +1368,14 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
         south: {
           lembrete_5: southList5.length,
           lembrete_2: southList2.length,
+          cobranca_3: southListAtraso3.length,
           cobranca_4: southListAtraso4.length,
           cobranca_15: southListAtraso15.length,
         },
         i9: {
           lembrete_5: i9List5.length,
           lembrete_2: i9List2.length,
+          cobranca_3: i9ListAtraso3.length,
           cobranca_4: i9ListAtraso4.length,
           cobranca_15: i9ListAtraso15.length,
         },
@@ -1341,7 +1384,6 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
     });
   } catch (erro) {
     console.error("Erro em /notificacoes-pendentes:", erro.message);
-
     return res.status(500).json({
       erro: "Erro ao consolidar notificações diárias",
     });
@@ -1365,83 +1407,65 @@ app.get("/teste-vencimentos", protegerRotaInterna, async (req, res) => {
 
 app.get("/teste-vencimentos-i9", protegerRotaInterna, async (req, res) => {
   const data = req.query.data || dayjs().format("YYYY-MM-DD");
-  const tipo = req.query.tipo || "manual";
+  const tipo = req.query.tipo || "lembrete_5";
   const dados = await i9BuscarVencimentos(data, tipo);
   res.json({ total: dados.length, data, sistema: "i9", dados });
 });
+
+// Nova rota de diagnóstico exclusiva para o /relboletos
+app.get("/teste-relboletos", protegerRotaInterna, async (req, res) => {
+  const data = req.query.data || dayjs().format("YYYY-MM-DD");
+  const tipo = req.query.tipo || "lembrete_5";
+  const dados = await i9BuscarVencimentosRelboletos(data, tipo);
+  res.json({ total: dados.length, data, sistema: "i9_relboletos", dados });
+});
+
 app.post("/teste-template", protegerRotaInterna, async (req, res) => {
   try {
     const { telefone, template, parametros = [] } = req.body;
 
     if (!telefone || !template) {
-      return res.status(400).json({
-        ok: false,
-        erro: "Informe telefone e template",
-      });
+      return res.status(400).json({ ok: false, erro: "Informe telefone e template" });
     }
 
     const numero = normalizarTelefoneBR(telefone);
     const resultado = await enviarTemplate(numero, template, parametros);
 
-    return res.json({
-      ok: true,
-      telefone: numero,
-      template,
-      resultado,
-    });
+    return res.json({ ok: true, telefone: numero, template, resultado });
   } catch (erro) {
-    return res.status(500).json({
-      ok: false,
-      erro: erro.response?.data || erro.message,
-    });
+    return res.status(500).json({ ok: false, erro: erro.response?.data || erro.message });
   }
 });
+
 app.get("/dashboard/resumo", protegerRotaInterna, (req, res) => {
   const consultas = carregarJson(ARQUIVO_LOG_CONSULTAS, []);
   const notificacoes = carregarJson(ARQUIVO_LOG_NOTIFICACOES, []);
   const optout = carregarJson(ARQUIVO_OPTOUT, []);
-  const envios = carregarJson(ARQUIVO_ENVIOS, {
-    porDia: {},
-    porHora: {},
-    enviosExatos: {},
-  });
+  const envios = carregarJson(ARQUIVO_ENVIOS, { porDia: {}, porHora: {}, enviosExatos: {} });
   const avaliacoes = carregarJson(ARQUIVO_LOG_AVALIACOES, []);
 
   const hoje = dayjs().format("YYYY-MM-DD");
 
-  const consultasHoje = consultas.filter((c) =>
-    String(c.data || "").startsWith(hoje)
-  );
-
-  const notificacoesHoje = notificacoes.filter((n) =>
-    String(n.data || "").startsWith(hoje)
-  );
-
-  const avaliacoesHoje = avaliacoes.filter((a) =>
-    String(a.data || "").startsWith(hoje)
-  );
+  const consultasHoje = consultas.filter((c) => String(c.data || "").startsWith(hoje));
+  const notificacoesHoje = notificacoes.filter((n) => String(n.data || "").startsWith(hoje));
+  const avaliacoesHoje = avaliacoes.filter((a) => String(a.data || "").startsWith(hoje));
 
   const mediaAvaliacoes =
     avaliacoes.length > 0
-      ? avaliacoes.reduce((soma, a) => soma + Number(a.nota || 0), 0) /
-        avaliacoes.length
+      ? avaliacoes.reduce((soma, a) => soma + Number(a.nota || 0), 0) / avaliacoes.length
       : 0;
 
   const mediaAvaliacoesHoje =
     avaliacoesHoje.length > 0
-      ? avaliacoesHoje.reduce((soma, a) => soma + Number(a.nota || 0), 0) /
-        avaliacoesHoje.length
+      ? avaliacoesHoje.reduce((soma, a) => soma + Number(a.nota || 0), 0) / avaliacoesHoje.length
       : 0;
 
   res.json({
     consultasHoje: consultasHoje.length,
-    boletosEncontradosHoje: consultasHoje.filter(
-      (c) => c.status === "encontrado"
-    ).length,
+    boletosEncontradosHoje: consultasHoje.filter((c) => c.status === "encontrado").length,
     notificacoesHoje: notificacoesHoje.length,
     optoutTotal: Array.isArray(optout) ? optout.length : 0,
     enviosRegistrados: Object.keys(envios.enviosExatos || {}).length,
-
     avaliacoesHoje: avaliacoesHoje.length,
     mediaAvaliacoes: Number(mediaAvaliacoes.toFixed(2)),
     mediaAvaliacoesHoje: Number(mediaAvaliacoesHoje.toFixed(2)),
@@ -1459,12 +1483,15 @@ app.get("/dashboard/notificacoes", protegerRotaInterna, (req, res) => {
 app.get("/dashboard/optout", protegerRotaInterna, (req, res) => {
   res.json(carregarJson(ARQUIVO_OPTOUT, []));
 });
+
 app.get("/dashboard/avaliacoes", protegerRotaInterna, (req, res) => {
   res.json(carregarJson(ARQUIVO_LOG_AVALIACOES, []).slice(0, 100));
 });
+
 app.get("/dashboard/conversas", protegerRotaInterna, (req, res) => {
   res.json(carregarJson(ARQUIVO_LOG_CONVERSAS, []).slice(0, 300));
 });
+
 app.listen(PORT, () => {
   console.log(`✅ API rodando na porta ${PORT}`);
 });
@@ -1502,17 +1529,18 @@ async function enviarTemplate(to, templateName, parametros = []) {
         },
       },
     );
+
     const messageId = response.data?.messages?.[0]?.id;
 
-registrarLogConversa({
-  telefone: to,
-  nome: "Associado",
-  origem: "bot",
-  tipo: "template",
-  mensagem: templateName,
-  message_id: messageId,
-  status: "sent",
-});
+    registrarLogConversa({
+      telefone: to,
+      nome: "Associado",
+      origem: "bot",
+      tipo: "template",
+      mensagem: templateName,
+      message_id: messageId,
+      status: "sent",
+    });
 
     console.log(
       `✅ TEMPLATE ENVIADO (${templateName}) para ${to}:`,
@@ -1523,6 +1551,7 @@ registrarLogConversa({
     console.error("❌ ERRO TEMPLATE:", erro.response?.data || erro.message);
   }
 }
+
 module.exports = {
   app,
   enviarTexto,
