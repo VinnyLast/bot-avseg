@@ -94,51 +94,26 @@ const ultimoCanalPorNumero = Object.create(null);
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
 function estaEmHorarioAtendimento() {
   const agora = new Date();
-
-  // Ajuste Brasil/Bahia UTC-3
   const horaBrasil = (agora.getUTCHours() - 3 + 24) % 24;
-
-  // Dia da semana em UTC ajustado para Brasil
   const dataBrasil = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
   const diaSemana = dataBrasil.getUTCDay();
 
-  // getUTCDay():
-  // 0 = domingo
-  // 1 = segunda
-  // 2 = terça
-  // 3 = quarta
-  // 4 = quinta
-  // 5 = sexta
-  // 6 = sábado
-
-  // Domingo fechado
-  if (diaSemana === 0) {
-    return false;
-  }
-
-  // Sábado: 08:00 às 12:00
-  if (diaSemana === 6) {
-    return horaBrasil >= 8 && horaBrasil < 12;
-  }
-
-  // Segunda a sexta: 08:00 às 18:00
+  if (diaSemana === 0) return false;
+  if (diaSemana === 6) return horaBrasil >= 8 && horaBrasil < 12;
   return horaBrasil >= 8 && horaBrasil < 18;
 }
+
 function carregarJson(caminho, padrao) {
   try {
     if (!fs.existsSync(caminho)) return padrao;
-
     const conteudo = fs.readFileSync(caminho, "utf8");
     if (!conteudo.trim()) return padrao;
-
     return JSON.parse(conteudo);
   } catch (erro) {
-    console.error(
-      `❌ Erro ao carregar ${path.basename(caminho)}:`,
-      erro.message,
-    );
+    console.error(`❌ Erro ao carregar ${path.basename(caminho)}:`, erro.message);
     return padrao;
   }
 }
@@ -150,15 +125,11 @@ function salvarJson(caminho, dados) {
     console.error(`❌ Erro ao salvar ${path.basename(caminho)}:`, erro.message);
   }
 }
+
 function registrarLogAvaliacao(item) {
   try {
     const logs = carregarJson(ARQUIVO_LOG_AVALIACOES, []);
-
-    logs.unshift({
-      ...item,
-      data: new Date().toISOString(),
-    });
-
+    logs.unshift({ ...item, data: new Date().toISOString() });
     salvarJson(ARQUIVO_LOG_AVALIACOES, logs.slice(0, 1000));
   } catch (erro) {
     console.error("❌ Erro ao registrar avaliação:", erro.message);
@@ -178,41 +149,30 @@ function montarParametrosTemplate(item) {
   if (item.tipo === "aniversario") {
     return [item.nome || "Associado"];
   }
-
   return [
     item.nome || "Associado",
     item.placa || "ND",
     formatarDataBR(item.vencimento),
   ];
 }
+
 function delayAleatorioTemplate() {
   const min = DELAY_TEMPLATE_MIN_MS;
   const max = DELAY_TEMPLATE_MAX_MS;
-
   if (max <= min) return min;
-
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
 function carregarEnvios() {
   try {
     if (!fs.existsSync(ARQUIVO_ENVIOS)) {
-      return {
-        porDia: {},
-        porHora: {},
-        enviosExatos: {},
-      };
+      return { porDia: {}, porHora: {}, enviosExatos: {} };
     }
-
     const conteudo = fs.readFileSync(ARQUIVO_ENVIOS, "utf8");
     return JSON.parse(conteudo);
   } catch (erro) {
     console.error("❌ Erro ao carregar envios_templates.json:", erro.message);
-    return {
-      porDia: {},
-      porHora: {},
-      enviosExatos: {},
-    };
+    return { porDia: {}, porHora: {}, enviosExatos: {} };
   }
 }
 
@@ -235,73 +195,32 @@ function chaveHora() {
 function montarChaveExataEnvio(item, telefone, templateName) {
   const placa = item.placa || "ND";
   const vencimento = formatarDataBR(item.vencimento || "ND");
-
-  return [
-    telefone,
-    templateName,
-    item.tipo || "sem_tipo",
-    placa,
-    vencimento,
-  ].join("|");
+  return [telefone, templateName, item.tipo || "sem_tipo", placa, vencimento].join("|");
 }
 
 function podeEnviarTemplateSeguro(item, telefone, templateName) {
   const envios = carregarEnvios();
-
   const dia = chaveDia();
   const hora = chaveHora();
-
   const chaveClienteDia = `${dia}|${telefone}`;
   const chaveGlobalHora = hora;
   const chaveExata = montarChaveExataEnvio(item, telefone, templateName);
-
   const totalClienteDia = envios.porDia[chaveClienteDia] || 0;
   const totalHora = envios.porHora[chaveGlobalHora] || 0;
   const jaEnviadoExato = Boolean(envios.enviosExatos[chaveExata]);
 
-  if (jaEnviadoExato) {
-    return {
-      permitido: false,
-      motivo: `duplicado exato: ${chaveExata}`,
-    };
-  }
+  if (jaEnviadoExato) return { permitido: false, motivo: `duplicado exato: ${chaveExata}` };
+  if (totalClienteDia >= MAX_TEMPLATES_POR_CLIENTE_DIA) return { permitido: false, motivo: `limite diário do cliente atingido: ${telefone}` };
+  if (totalHora >= MAX_TEMPLATES_POR_HORA) return { permitido: false, motivo: `limite global por hora atingido: ${hora}` };
 
-  if (totalClienteDia >= MAX_TEMPLATES_POR_CLIENTE_DIA) {
-    return {
-      permitido: false,
-      motivo: `limite diário do cliente atingido: ${telefone}`,
-    };
-  }
-
-  if (totalHora >= MAX_TEMPLATES_POR_HORA) {
-    return {
-      permitido: false,
-      motivo: `limite global por hora atingido: ${hora}`,
-    };
-  }
-
-  return {
-    permitido: true,
-    envios,
-    chaveClienteDia,
-    chaveGlobalHora,
-    chaveExata,
-  };
+  return { permitido: true, envios, chaveClienteDia, chaveGlobalHora, chaveExata };
 }
 
 function registrarEnvioTemplate(controle) {
   const envios = controle.envios || carregarEnvios();
-
-  envios.porDia[controle.chaveClienteDia] =
-    (envios.porDia[controle.chaveClienteDia] || 0) + 1;
-
-  envios.porHora[controle.chaveGlobalHora] =
-    (envios.porHora[controle.chaveGlobalHora] || 0) + 1;
-
-  envios.enviosExatos[controle.chaveExata] = {
-    enviadoEm: new Date().toISOString(),
-  };
-
+  envios.porDia[controle.chaveClienteDia] = (envios.porDia[controle.chaveClienteDia] || 0) + 1;
+  envios.porHora[controle.chaveGlobalHora] = (envios.porHora[controle.chaveGlobalHora] || 0) + 1;
+  envios.enviosExatos[controle.chaveExata] = { enviadoEm: new Date().toISOString() };
   salvarEnvios(envios);
 }
 
@@ -329,8 +248,7 @@ function normalizarPlaca(texto) {
 }
 
 function formatarValor(valor) {
-  if (valor === null || valor === undefined || valor === "" || valor === "ND")
-    return "ND";
+  if (valor === null || valor === undefined || valor === "" || valor === "ND") return "ND";
   const numero = Number(String(valor).replace(",", "."));
   if (Number.isNaN(numero)) return String(valor);
   return numero.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -410,17 +328,101 @@ function montarHeadersChatwoot() {
 }
 
 // =============================================================================
+// IA — RESPOSTA INTELIGENTE VIA ANTHROPIC
+// =============================================================================
+
+/**
+ * Usa a API da Anthropic para interpretar mensagens fora do fluxo do menu
+ * (respostas a lembretes e cobranças) e gerar uma resposta natural.
+ */
+async function responderComIA(from, bodyText, msgType, contexto = {}) {
+  try {
+    const ehMidia = msgType !== "text";
+
+    // Monta o conteúdo da mensagem para a IA
+    const mensagemCliente = ehMidia
+      ? `[O cliente enviou um ${msgType === "image" ? "comprovante/imagem" : msgType}]${bodyText ? `: ${bodyText}` : ""}`
+      : bodyText;
+
+    const systemPrompt = `Você é um assistente virtual da AVSEG Proteção Veicular, empresa de proteção de veículos localizada em Feira de Santana, Bahia.
+
+Você está respondendo a um cliente que recebeu um lembrete ou cobrança automática e respondeu fora do menu principal do WhatsApp.
+
+Seu objetivo é interpretar a mensagem do cliente e responder de forma natural, cordial e profissional em português brasileiro.
+
+Diretrizes:
+- Se o cliente disser que já pagou ("já paguei", "paguei hoje", "efetuei o pagamento", etc): agradeça, diga que o pagamento pode levar até 2 dias úteis para ser processado e que a proteção continua ativa.
+- Se o cliente enviar comprovante ou imagem: agradeça pelo envio, informe que será verificado e que a proteção continua ativa.
+- Se o cliente responder com "ok", "👍", "certo", "entendido" ou similar: agradeça a confirmação de forma breve e cordial.
+- Se o cliente reclamar do valor, prazo ou cobrança: demonstre empatia, explique que pode buscar a segunda via pelo menu e sugira digitar "menu".
+- Se o cliente pedir para falar com atendente: informe que pode digitar "5" no menu para ser atendido por um especialista.
+- Se o cliente disser que vai pagar: encoraje e informe que pode obter a segunda via digitando "menu".
+- Se não conseguir interpretar: responda de forma amigável e sugira digitar "menu".
+
+Sempre finalize sugerindo digitar "menu" se precisar de mais ajuda, exceto em respostas muito curtas onde não faz sentido.
+Mantenha respostas curtas e objetivas — no máximo 4 linhas.
+Não use asteriscos para negrito no início de frases de agradecimento.
+Assine como: AVSEG Proteção Veicular`;
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 300,
+        system: systemPrompt,
+        messages: [
+          {
+            role: "user",
+            content: mensagemCliente,
+          },
+        ],
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("❌ Erro na API Anthropic:", data);
+      return null;
+    }
+
+    const textoResposta = data?.content?.[0]?.text?.trim();
+
+    if (!textoResposta) return null;
+
+    // Registra no log o que a IA interpretou
+    registrarLogConversa({
+      telefone: normalizarTelefoneBR(from),
+      nome: "IA",
+      origem: "bot_ia",
+      tipo: "ia_resposta",
+      mensagem: textoResposta,
+      mensagemOriginal: bodyText || `[${msgType}]`,
+    });
+
+    console.log(`🤖 IA respondeu para ${from}: ${textoResposta.slice(0, 80)}...`);
+
+    return textoResposta;
+  } catch (erro) {
+    console.error("❌ Erro ao chamar IA:", erro.message);
+    return null;
+  }
+}
+
+// =============================================================================
 // CHATWOOT — API
 // =============================================================================
 async function criarOuBuscarContatoChatwoot(telefone, nome = "Cliente") {
   if (!temChatwootConfigurado()) return null;
 
   const nomeFinal =
-    nome && nome !== "Associado" && nome !== "Cliente"
-      ? nome
-      : "Cliente";
+    nome && nome !== "Associado" && nome !== "Cliente" ? nome : "Cliente";
 
-  // Tenta encontrar contato existente
   try {
     const busca = await axios.get(
       `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/contacts/search`,
@@ -435,34 +437,18 @@ async function criarOuBuscarContatoChatwoot(telefone, nome = "Cliente") {
 
     if (contatos.length > 0) {
       const contato = contatos[0];
-
       console.log(`🔍 Contato encontrado no Chatwoot: ${contato.id}`);
 
-      // Atualiza o nome se veio nome real do WhatsApp
-      if (
-        nomeFinal &&
-        nomeFinal !== "Cliente" &&
-        contato.name !== nomeFinal
-      ) {
+      if (nomeFinal && nomeFinal !== "Cliente" && contato.name !== nomeFinal) {
         try {
           await axios.put(
             `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/contacts/${contato.id}`,
-            {
-              name: nomeFinal,
-              phone_number: `+${telefone}`,
-            },
-            {
-              headers: montarHeadersChatwoot(),
-              timeout: 10000,
-            },
+            { name: nomeFinal, phone_number: `+${telefone}` },
+            { headers: montarHeadersChatwoot(), timeout: 10000 },
           );
-
           console.log(`✅ Nome atualizado no Chatwoot: ${nomeFinal}`);
         } catch (erroUpdate) {
-          console.error(
-            "⚠️ Contato encontrado, mas não consegui atualizar nome:",
-            erroUpdate.response?.data || erroUpdate.message,
-          );
+          console.error("⚠️ Não consegui atualizar nome:", erroUpdate.response?.data || erroUpdate.message);
         }
       }
 
@@ -470,27 +456,16 @@ async function criarOuBuscarContatoChatwoot(telefone, nome = "Cliente") {
     }
   } catch (_) {}
 
-  // Cria novo contato
   try {
     const criado = await axios.post(
       `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/contacts`,
-      {
-        name: nomeFinal,
-        phone_number: `+${telefone}`,
-      },
-      {
-        headers: montarHeadersChatwoot(),
-        timeout: 10000,
-      },
+      { name: nomeFinal, phone_number: `+${telefone}` },
+      { headers: montarHeadersChatwoot(), timeout: 10000 },
     );
-
     console.log(`✅ Contato criado no Chatwoot: ${criado.data?.id}`);
     return criado.data?.id;
   } catch (erro) {
-    console.error(
-      "❌ Erro ao criar contato:",
-      erro.response?.data || erro.message,
-    );
+    console.error("❌ Erro ao criar contato:", erro.response?.data || erro.message);
     return null;
   }
 }
@@ -502,7 +477,6 @@ async function criarConversaChatwoot(telefone, nome = "Associado") {
     const contactId = await criarOuBuscarContatoChatwoot(telefone, nome);
     if (!contactId) return null;
 
-    // Busca o inbox WhatsApp
     let inboxId = CHATWOOT_INBOX_ID;
 
     if (!inboxId) {
@@ -512,15 +486,11 @@ async function criarConversaChatwoot(telefone, nome = "Associado") {
       );
 
       const inbox = inboxes.data?.payload?.find((i) =>
-        String(i.channel_type || "")
-          .toLowerCase()
-          .includes("api"),
+        String(i.channel_type || "").toLowerCase().includes("api"),
       );
 
       if (!inbox) {
-        console.error(
-          "❌ Inbox API não encontrada no Chatwoot. Configure CHATWOOT_INBOX_ID no .env",
-        );
+        console.error("❌ Inbox API não encontrada no Chatwoot.");
         return null;
       }
 
@@ -537,10 +507,7 @@ async function criarConversaChatwoot(telefone, nome = "Associado") {
     console.log(`✅ Conversa criada no Chatwoot: ${conversationId}`);
     return conversationId;
   } catch (erro) {
-    console.error(
-      "❌ Erro ao criar conversa:",
-      erro.response?.data || erro.message,
-    );
+    console.error("❌ Erro ao criar conversa:", erro.response?.data || erro.message);
     return null;
   }
 }
@@ -556,12 +523,10 @@ async function enviarTextoChatwoot(conversationId, texto, isPrivate = false) {
     { headers: montarHeadersChatwoot(), timeout: 15000 },
   );
 
-  console.log(
-    `✅ TEXTO ENVIADO CHATWOOT conv=${conversationId}:`,
-    response.data?.id || "ok",
-  );
+  console.log(`✅ TEXTO ENVIADO CHATWOOT conv=${conversationId}:`, response.data?.id || "ok");
   return response.data;
 }
+
 async function enviarMensagemClienteChatwoot(conversationId, texto) {
   if (!temChatwootConfigurado() || !conversationId || !texto) return;
 
@@ -576,38 +541,23 @@ async function enviarMensagemClienteChatwoot(conversationId, texto) {
         private: false,
         source_id: `wa_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       },
-      {
-        headers: montarHeadersChatwoot(),
-        timeout: 15000,
-      },
+      { headers: montarHeadersChatwoot(), timeout: 15000 },
     );
 
-    console.log(
-      `✅ Mensagem do cliente enviada ao Chatwoot conv=${conversationId}:`,
-      response.data?.id || "ok",
-    );
-
+    console.log(`✅ Mensagem do cliente enviada ao Chatwoot conv=${conversationId}:`, response.data?.id || "ok");
     return response.data;
   } catch (erro) {
-    console.error(
-      "❌ Erro ao enviar mensagem do cliente para Chatwoot:",
-      erro.response?.data || erro.message,
-    );
+    console.error("❌ Erro ao enviar mensagem do cliente para Chatwoot:", erro.response?.data || erro.message);
   }
 }
+
 async function baixarMidiaMeta(mediaId) {
   if (!mediaId) return null;
 
   try {
-    // 1. Busca URL temporária da mídia
     const metaInfo = await axios.get(
       `https://graph.facebook.com/v25.0/${mediaId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-        },
-        timeout: 15000,
-      },
+      { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` }, timeout: 15000 },
     );
 
     const mediaUrl = metaInfo.data?.url;
@@ -615,24 +565,15 @@ async function baixarMidiaMeta(mediaId) {
 
     if (!mediaUrl) return null;
 
-    // 2. Baixa o arquivo
     const arquivo = await axios.get(mediaUrl, {
-      headers: {
-        Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-      },
+      headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` },
       responseType: "arraybuffer",
       timeout: 30000,
     });
 
-    return {
-      buffer: Buffer.from(arquivo.data),
-      mimeType,
-    };
+    return { buffer: Buffer.from(arquivo.data), mimeType };
   } catch (erro) {
-    console.error(
-      "❌ Erro ao baixar mídia da Meta:",
-      erro.response?.data || erro.message,
-    );
+    console.error("❌ Erro ao baixar mídia da Meta:", erro.response?.data || erro.message);
     return null;
   }
 }
@@ -640,41 +581,10 @@ async function baixarMidiaMeta(mediaId) {
 function obterMidiaDaMensagem(message) {
   if (!message) return null;
 
-  if (message.type === "image") {
-    return {
-      mediaId: message.image?.id,
-      mimeType: message.image?.mime_type || "image/jpeg",
-      filename: `imagem_${Date.now()}.jpg`,
-      legenda: message.image?.caption || "",
-    };
-  }
-
-  if (message.type === "document") {
-    return {
-      mediaId: message.document?.id,
-      mimeType: message.document?.mime_type || "application/octet-stream",
-      filename: message.document?.filename || `documento_${Date.now()}`,
-      legenda: message.document?.caption || "",
-    };
-  }
-
-  if (message.type === "audio") {
-    return {
-      mediaId: message.audio?.id,
-      mimeType: message.audio?.mime_type || "audio/ogg",
-      filename: `audio_${Date.now()}.ogg`,
-      legenda: "",
-    };
-  }
-
-  if (message.type === "video") {
-    return {
-      mediaId: message.video?.id,
-      mimeType: message.video?.mime_type || "video/mp4",
-      filename: `video_${Date.now()}.mp4`,
-      legenda: message.video?.caption || "",
-    };
-  }
+  if (message.type === "image") return { mediaId: message.image?.id, mimeType: message.image?.mime_type || "image/jpeg", filename: `imagem_${Date.now()}.jpg`, legenda: message.image?.caption || "" };
+  if (message.type === "document") return { mediaId: message.document?.id, mimeType: message.document?.mime_type || "application/octet-stream", filename: message.document?.filename || `documento_${Date.now()}`, legenda: message.document?.caption || "" };
+  if (message.type === "audio") return { mediaId: message.audio?.id, mimeType: message.audio?.mime_type || "audio/ogg", filename: `audio_${Date.now()}.ogg`, legenda: "" };
+  if (message.type === "video") return { mediaId: message.video?.id, mimeType: message.video?.mime_type || "video/mp4", filename: `video_${Date.now()}.mp4`, legenda: message.video?.caption || "" };
 
   return null;
 }
@@ -683,11 +593,9 @@ async function enviarAnexoClienteChatwoot(conversationId, message) {
   if (!temChatwootConfigurado() || !conversationId || !message) return;
 
   const midia = obterMidiaDaMensagem(message);
-
   if (!midia?.mediaId) return;
 
   const baixado = await baixarMidiaMeta(midia.mediaId);
-
   if (!baixado?.buffer) return;
 
   try {
@@ -697,47 +605,28 @@ async function enviarAnexoClienteChatwoot(conversationId, message) {
     form.append("message_type", "incoming");
     form.append("private", "false");
     form.append("content", midia.legenda || `[${message.type}]`);
-    form.append(
-      "attachments[]",
-      baixado.buffer,
-      {
-        filename: midia.filename,
-        contentType: midia.mimeType || baixado.mimeType,
-      },
-    );
+    form.append("attachments[]", baixado.buffer, {
+      filename: midia.filename,
+      contentType: midia.mimeType || baixado.mimeType,
+    });
 
     const url = `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/messages`;
 
     const response = await axios.post(url, form, {
-      headers: {
-        api_access_token: CHATWOOT_API_TOKEN,
-        ...form.getHeaders(),
-      },
+      headers: { api_access_token: CHATWOOT_API_TOKEN, ...form.getHeaders() },
       timeout: 60000,
       maxBodyLength: Infinity,
       maxContentLength: Infinity,
     });
 
-    console.log(
-      `✅ Anexo enviado ao Chatwoot conv=${conversationId}:`,
-      response.data?.id || "ok",
-    );
-
+    console.log(`✅ Anexo enviado ao Chatwoot conv=${conversationId}:`, response.data?.id || "ok");
     return response.data;
   } catch (erro) {
-    console.error(
-      "❌ Erro ao enviar anexo para Chatwoot:",
-      erro.response?.data || erro.message,
-    );
+    console.error("❌ Erro ao enviar anexo para Chatwoot:", erro.response?.data || erro.message);
   }
 }
-async function espelharMensagemNoChatwoot({
-  from,
-  bodyText,
-  msgType = "text",
-  message = null,
-  nomeCliente = "Cliente",
-}) {
+
+async function espelharMensagemNoChatwoot({ from, bodyText, msgType = "text", message = null, nomeCliente = "Cliente" }) {
   if (!temChatwootConfigurado()) return null;
 
   try {
@@ -745,43 +634,34 @@ async function espelharMensagemNoChatwoot({
 
     if (!convId) {
       convId = await criarConversaChatwoot(from, nomeCliente || "Cliente");
-
-      if (convId) {
-        atualizarUltimoCanal(from, {
-          origem: "meta",
-          conversationId: convId,
-        });
-      }
+      if (convId) atualizarUltimoCanal(from, { origem: "meta", conversationId: convId });
     }
 
     if (!convId) return null;
 
     const textoParaChatwoot =
-  bodyText && String(bodyText).trim()
-    ? bodyText
-    : `[${msgType || "mensagem"} recebida]`;
+      bodyText && String(bodyText).trim()
+        ? bodyText
+        : `[${msgType || "mensagem"} recebida]`;
 
-if (msgType === "text") {
-  await enviarMensagemClienteChatwoot(convId, textoParaChatwoot);
-} else {
-  const anexoEnviado = await enviarAnexoClienteChatwoot(convId, message);
-
-  if (!anexoEnviado) {
-    await enviarMensagemClienteChatwoot(convId, textoParaChatwoot);
-  } else if (bodyText && String(bodyText).trim()) {
-    await enviarMensagemClienteChatwoot(convId, bodyText);
-  }
-}
+    if (msgType === "text") {
+      await enviarMensagemClienteChatwoot(convId, textoParaChatwoot);
+    } else {
+      const anexoEnviado = await enviarAnexoClienteChatwoot(convId, message);
+      if (!anexoEnviado) {
+        await enviarMensagemClienteChatwoot(convId, textoParaChatwoot);
+      } else if (bodyText && String(bodyText).trim()) {
+        await enviarMensagemClienteChatwoot(convId, bodyText);
+      }
+    }
 
     return convId;
   } catch (erro) {
-    console.error(
-      "❌ Erro ao espelhar mensagem no Chatwoot:",
-      erro.response?.data || erro.message,
-    );
+    console.error("❌ Erro ao espelhar mensagem no Chatwoot:", erro.response?.data || erro.message);
     return null;
   }
 }
+
 async function registrarAcaoClienteChatwoot(from, acao, conversationId = null) {
   if (!temChatwootConfigurado()) return;
 
@@ -790,13 +670,7 @@ async function registrarAcaoClienteChatwoot(from, acao, conversationId = null) {
 
     if (!convId) {
       convId = await criarConversaChatwoot(from, "Cliente");
-
-      if (convId) {
-        atualizarUltimoCanal(from, {
-          origem: "meta",
-          conversationId: convId,
-        });
-      }
+      if (convId) atualizarUltimoCanal(from, { origem: "meta", conversationId: convId });
     }
 
     if (!convId) return;
@@ -804,15 +678,13 @@ async function registrarAcaoClienteChatwoot(from, acao, conversationId = null) {
     await enviarTextoChatwoot(
       convId,
       `🧭 *Ação identificada pelo bot*\n\n${acao}\n\n📱 Número: +${from}`,
-      true
+      true,
     );
   } catch (erro) {
-    console.error(
-      "❌ Erro ao registrar ação do cliente no Chatwoot:",
-      erro.response?.data || erro.message
-    );
+    console.error("❌ Erro ao registrar ação do cliente no Chatwoot:", erro.response?.data || erro.message);
   }
 }
+
 async function abrirConversaHumanaChatwoot(conversationId) {
   if (!temChatwootConfigurado() || !conversationId) return;
 
@@ -824,10 +696,7 @@ async function abrirConversaHumanaChatwoot(conversationId) {
     );
     console.log(`👨‍💻 Conversa ${conversationId} aberta para humano no Chatwoot`);
   } catch (erro) {
-    console.error(
-      `❌ Erro ao abrir conversa humana:`,
-      erro.response?.data || erro.message,
-    );
+    console.error(`❌ Erro ao abrir conversa humana:`, erro.response?.data || erro.message);
   }
 }
 
@@ -842,10 +711,7 @@ async function marcarConversaResolvidaChatwoot(conversationId) {
     );
     console.log(`✅ Conversa ${conversationId} resolvida no Chatwoot`);
   } catch (erro) {
-    console.error(
-      `❌ Erro ao resolver conversa:`,
-      erro.response?.data || erro.message,
-    );
+    console.error(`❌ Erro ao resolver conversa:`, erro.response?.data || erro.message);
   }
 }
 
@@ -864,8 +730,7 @@ async function enviarTextoCanal(from, texto, contexto = {}) {
 
   try {
     if (origem === "chatwoot") {
-      const conversationId =
-        contexto.conversationId || obterUltimoCanal(numero)?.conversationId;
+      const conversationId = contexto.conversationId || obterUltimoCanal(numero)?.conversationId;
       if (!conversationId) {
         await enviarTexto(numero, texto);
         return;
@@ -873,35 +738,38 @@ async function enviarTextoCanal(from, texto, contexto = {}) {
       await enviarTextoChatwoot(conversationId, texto);
       return;
     }
+
+    // Envia pelo WhatsApp normalmente
     await enviarTexto(numero, texto);
     console.log(`✅ Texto enviado para ${numero}`);
+
+    // Espelha no Chatwoot apenas se houver conversa ativa (cliente já interagiu)
+    if (temChatwootConfigurado()) {
+      const conversationId = contexto.conversationId || obterUltimoCanal(numero)?.conversationId;
+      if (conversationId) {
+        try {
+          await enviarTextoChatwoot(conversationId, texto, false);
+        } catch (erroChatwoot) {
+          console.warn(`⚠️ Não foi possível espelhar mensagem no Chatwoot:`, erroChatwoot.message);
+        }
+      }
+    }
   } catch (erro) {
-    console.error(
-      `❌ Erro ao enviar texto para ${numero}:`,
-      erro.response?.data || erro.message,
-    );
+    console.error(`❌ Erro ao enviar texto para ${numero}:`, erro.response?.data || erro.message);
   }
 }
 
 async function enviarImagemCanal(from, imageUrl, caption = "", contexto = {}) {
   const numero = normalizarTelefoneBR(from);
-
   if (!numero) return;
-
   if (!podeEnviar(numero)) return;
 
   try {
-    // Envia imagem normal em qualquer canal
     await enviarImagem(numero, imageUrl, caption);
-
     console.log(`✅ Imagem enviada para ${numero}`);
   } catch (erro) {
     console.error("Erro enviando imagem:", erro.response?.data || erro.message);
-
-    // fallback só se der erro de verdade
-    if (caption) {
-      await enviarTextoCanal(numero, caption, contexto);
-    }
+    if (caption) await enviarTextoCanal(numero, caption, contexto);
   }
 }
 
@@ -923,12 +791,7 @@ function montarOpcoesMenu() {
 async function enviarMenu(numero, cliente, contexto = {}) {
   let saudacao = `🦁 *AVSEG Proteção Veicular*\n\n`;
 
-  if (
-    cliente &&
-    !cliente.erro &&
-    Array.isArray(cliente.veiculos) &&
-    cliente.veiculos.length
-  ) {
+  if (cliente && !cliente.erro && Array.isArray(cliente.veiculos) && cliente.veiculos.length) {
     saudacao += `Olá *${cliente.nome || "Associado"}*! 👋\n\n🚗 *Seus veículos:*\n\n`;
     cliente.veiculos.forEach((v, i) => {
       saudacao += `${i + 1}️⃣ Placa: ${v.placa || "ND"}\n📅 Vencimento: ${v.vencimento || "ND"}\n\n`;
@@ -1034,27 +897,14 @@ async function processarAvaliacao(from, texto, contexto = {}) {
   const nota = parseInt(texto, 10);
 
   if (isNaN(nota) || nota < 1 || nota > 5) {
-    await enviarTextoCanal(
-      from,
-      `❌ Nota inválida. Por favor, responda com um número de *1 a 5*.`,
-      contexto,
-    );
+    await enviarTextoCanal(from, `❌ Nota inválida. Por favor, responda com um número de *1 a 5*.`, contexto);
     return;
   }
 
   const estrelas = "⭐".repeat(nota);
-  registrarLogAvaliacao({
-    telefone: normalizarTelefoneBR(from),
-    nota,
-    origem: contexto.origem || "meta",
-  });
+  registrarLogAvaliacao({ telefone: normalizarTelefoneBR(from), nota, origem: contexto.origem || "meta" });
 
-  avaliacoes.push({
-    telefone: normalizarTelefoneBR(from),
-    nota,
-    data: new Date().toISOString(),
-    origem: contexto.origem || "meta",
-  });
+  avaliacoes.push({ telefone: normalizarTelefoneBR(from), nota, data: new Date().toISOString(), origem: contexto.origem || "meta" });
   console.log(`📊 Avaliação registrada: ${from} — nota ${nota}/5`);
 
   const mensagemNota = {
@@ -1091,18 +941,12 @@ async function processarPagamento(from, bodyText, contexto = {}) {
     payload.tipo = 3;
     payload.cnpj = somenteNumeros;
   } else {
-    await enviarTextoCanal(
-      from,
-      "❌ Envie uma placa, CPF (11 dígitos) ou CNPJ (14 dígitos) válido.",
-      contexto,
-    );
+    await enviarTextoCanal(from, "❌ Envie uma placa, CPF (11 dígitos) ou CNPJ (14 dígitos) válido.", contexto);
     return;
   }
 
   try {
     let dados;
-
-    // Envia o telefone do associado para registrar no dashboard
     payload.telefone = from;
 
     try {
@@ -1111,11 +955,7 @@ async function processarPagamento(from, bodyText, contexto = {}) {
     } catch (erroApi) {
       dados = erroApi.response?.data;
       if (!dados) {
-        await enviarTextoCanal(
-          from,
-          "❌ Não consegui consultar sua participação mensal agora. Tente novamente em instantes.",
-          contexto,
-        );
+        await enviarTextoCanal(from, "❌ Não consegui consultar sua participação mensal agora. Tente novamente em instantes.", contexto);
         estadoUsuario[from] = null;
         return;
       }
@@ -1124,24 +964,14 @@ async function processarPagamento(from, bodyText, contexto = {}) {
     if (dados?.status === "sucesso" && dados?.mensagemWhatsapp) {
       await enviarTextoCanal(from, dados.mensagemWhatsapp, contexto);
 
-      const veiculosComLinha = Array.isArray(dados.veiculos)
-        ? dados.veiculos.filter(existeLinhaDigitavel)
-        : [];
+      const veiculosComLinha = Array.isArray(dados.veiculos) ? dados.veiculos.filter(existeLinhaDigitavel) : [];
       for (const v of veiculosComLinha) {
         await delay(500);
-        await enviarTextoCanal(
-          from,
-          String(v.linhadigitavel).replace(/\s+/g, ""),
-          contexto,
-        );
+        await enviarTextoCanal(from, String(v.linhadigitavel).replace(/\s+/g, ""), contexto);
       }
 
       await delay(500);
-      await enviarTextoCanal(
-        from,
-        "Digite *menu* para voltar ao início ou *7* para encerrar.",
-        contexto,
-      );
+      await enviarTextoCanal(from, "Digite *menu* para voltar ao início ou *7* para encerrar.", contexto);
       estadoUsuario[from] = null;
       return;
     }
@@ -1149,25 +979,13 @@ async function processarPagamento(from, bodyText, contexto = {}) {
     if (dados?.status === "erro" && dados?.mensagemWhatsapp) {
       await enviarTextoCanal(from, dados.mensagemWhatsapp, contexto);
       await delay(500);
-      await enviarTextoCanal(
-        from,
-        "Digite *menu* para voltar ao início.",
-        contexto,
-      );
+      await enviarTextoCanal(from, "Digite *menu* para voltar ao início.", contexto);
       estadoUsuario[from] = null;
       return;
     }
 
-    if (
-      !dados ||
-      !Array.isArray(dados.veiculos) ||
-      dados.veiculos.length === 0
-    ) {
-      await enviarTextoCanal(
-        from,
-        `❌ ${dados?.mensagem || "Nenhum registro encontrado."}`,
-        contexto,
-      );
+    if (!dados || !Array.isArray(dados.veiculos) || dados.veiculos.length === 0) {
+      await enviarTextoCanal(from, `❌ ${dados?.mensagem || "Nenhum registro encontrado."}`, contexto);
       estadoUsuario[from] = null;
       return;
     }
@@ -1175,11 +993,7 @@ async function processarPagamento(from, bodyText, contexto = {}) {
     const comBoleto = dados.veiculos.filter(existeBoletoDisponivel);
 
     if (comBoleto.length === 0) {
-      await enviarTextoCanal(
-        from,
-        `⚠️ ${dados?.mensagem || "Cadastro encontrado, mas não há participação mensal em aberto no momento."}`,
-        contexto,
-      );
+      await enviarTextoCanal(from, `⚠️ ${dados?.mensagem || "Cadastro encontrado, mas não há participação mensal em aberto no momento."}`, contexto);
       estadoUsuario[from] = null;
       return;
     }
@@ -1189,28 +1003,16 @@ async function processarPagamento(from, bodyText, contexto = {}) {
       await enviarTextoCanal(from, montarResumoVeiculo(v, i), contexto);
       if (existeLinhaDigitavel(v)) {
         await delay(500);
-        await enviarTextoCanal(
-          from,
-          String(v.linhadigitavel).replace(/\s+/g, ""),
-          contexto,
-        );
+        await enviarTextoCanal(from, String(v.linhadigitavel).replace(/\s+/g, ""), contexto);
       }
       await delay(DELAY_ENVIO_MS);
     }
 
-    await enviarTextoCanal(
-      from,
-      "Digite *menu* para voltar ao início ou *7* para encerrar.",
-      contexto,
-    );
+    await enviarTextoCanal(from, "Digite *menu* para voltar ao início ou *7* para encerrar.", contexto);
     estadoUsuario[from] = null;
   } catch (erro) {
     console.error("Erro no fluxo de pagamento:", erro.message);
-    await enviarTextoCanal(
-      from,
-      "❌ Não consegui consultar sua participação mensal agora. Tente novamente em instantes.",
-      contexto,
-    );
+    await enviarTextoCanal(from, "❌ Não consegui consultar sua participação mensal agora. Tente novamente em instantes.", contexto);
     estadoUsuario[from] = null;
   }
 }
@@ -1218,64 +1020,40 @@ async function processarPagamento(from, bodyText, contexto = {}) {
 // =============================================================================
 // PROCESSAMENTO CENTRAL DE MENSAGENS
 // =============================================================================
-async function processarMensagem({
-  from,
-  bodyText,
-  origem = "meta",
-  conversationId = null,
-  msgType = "text",
-  message = null,
-  nomeCliente = "Cliente",
-}) {
-  const texto = String(bodyText || "")
-    .toLowerCase()
-    .trim();
+async function processarMensagem({ from, bodyText, origem = "meta", conversationId = null, msgType = "text", message = null, nomeCliente = "Cliente" }) {
+  const texto = String(bodyText || "").toLowerCase().trim();
   const http = axiosInterno();
   const contexto = { origem, conversationId };
-  // Espelha TODA mensagem recebida pelo WhatsApp no Chatwoot,
-// mesmo sem atendimento humano ativo.
-let conversationIdChatwoot = conversationId;
 
-if (origem === "meta" && temChatwootConfigurado()) {
-  conversationIdChatwoot = await espelharMensagemNoChatwoot({
-  from,
-  bodyText,
-  msgType,
-  message,
-  nomeCliente,
-});
+  // Espelha mensagem no Chatwoot
+  let conversationIdChatwoot = conversationId;
 
-  if (conversationIdChatwoot) {
-    contexto.conversationId = conversationIdChatwoot;
+  if (origem === "meta" && temChatwootConfigurado()) {
+    conversationIdChatwoot = await espelharMensagemNoChatwoot({ from, bodyText, msgType, message, nomeCliente });
+    if (conversationIdChatwoot) contexto.conversationId = conversationIdChatwoot;
   }
-}
 
-  // 0. Modo humano — bot silencioso até o cliente pedir menu
-  // 0. Modo humano — bot silencioso, mas encaminha mensagens para o Chatwoot
+  // 0. Modo humano
   if (modoHumano.has(from)) {
-  const canal = obterUltimoCanal(from);
-  const convId = conversationIdChatwoot || conversationId || canal?.conversationId;
+    const canal = obterUltimoCanal(from);
+    const convId = conversationIdChatwoot || conversationId || canal?.conversationId;
 
-  if (texto.trim().toLowerCase() === "menu") {
-    modoHumano.delete(from);
-    estadoUsuario[from] = null;
+    if (texto.trim().toLowerCase() === "menu") {
+      modoHumano.delete(from);
+      estadoUsuario[from] = null;
+      if (convId) await marcarConversaResolvidaChatwoot(convId);
 
-    if (convId) await marcarConversaResolvidaChatwoot(convId);
+      let cliente = null;
+      try {
+        const resposta = await http.post("/clienteTelefone", { telefone: from });
+        cliente = resposta.data;
+      } catch (_) {}
 
-    let cliente = null;
-    try {
-      const resposta = await http.post("/clienteTelefone", {
-        telefone: from,
-      });
-      cliente = resposta.data;
-    } catch (_) {}
-
-    await enviarMenu(from, cliente, contexto);
+      await enviarMenu(from, cliente, contexto);
+      return;
+    }
     return;
   }
-
-  return;
-}
 
   // 1. Fluxo avaliação
   if (estadoUsuario[from] === "avaliacao") {
@@ -1287,65 +1065,27 @@ if (origem === "meta" && temChatwootConfigurado()) {
   if (estadoUsuario[from] === "assistencia") {
     if (texto === "1") {
       estadoUsuario[from] = null;
-      await enviarTextoCanal(
-        from,
-        `🚨 *Assistência 24h — Roubo ou Furto*\n\n` +
-          `Em caso de roubo ou furto do seu veículo, mantenha a calma e siga as orientações:\n\n` +
-          `1️⃣ Ligue imediatamente para o *190* e registre a ocorrência.\n` +
-          `2️⃣ Em seguida, entre em contato com a nossa Assistência 24 horas:\n\n` +
-          `📞 *${TELEFONE_ASSISTENCIA}*\n\nEstamos prontos para te ajudar.`,
-        contexto,
-      );
+      await enviarTextoCanal(from, `🚨 *Assistência 24h — Roubo ou Furto*\n\nEm caso de roubo ou furto do seu veículo, mantenha a calma e siga as orientações:\n\n1️⃣ Ligue imediatamente para o *190* e registre a ocorrência.\n2️⃣ Em seguida, entre em contato com a nossa Assistência 24 horas:\n\n📞 *${TELEFONE_ASSISTENCIA}*\n\nEstamos prontos para te ajudar.`, contexto);
     } else if (texto === "2") {
       estadoUsuario[from] = null;
-      await enviarTextoCanal(
-        from,
-        `🛠️ *Assistência 24h — Pane Mecânica, Guincho ou Chaveiro*\n\n` +
-          `🔧 Em caso de pane mecânica, solicite atendimento para avaliação no local.\n` +
-          `🚗 Se necessário, acionaremos o guincho para remoção do veículo.\n` +
-          `🔑 Em situações de chaveiro, enviaremos um profissional para te auxiliar.\n\n` +
-          `📞 *${TELEFONE_ASSISTENCIA}*\n\nEstamos à disposição para cuidar de você! 💛`,
-        contexto,
-      );
+      await enviarTextoCanal(from, `🛠️ *Assistência 24h — Pane Mecânica, Guincho ou Chaveiro*\n\n🔧 Em caso de pane mecânica, solicite atendimento para avaliação no local.\n🚗 Se necessário, acionaremos o guincho para remoção do veículo.\n🔑 Em situações de chaveiro, enviaremos um profissional para te auxiliar.\n\n📞 *${TELEFONE_ASSISTENCIA}*\n\nEstamos à disposição para cuidar de você! 💛`, contexto);
     } else if (texto === "3") {
       estadoUsuario[from] = null;
-      await enviarTextoCanal(
-        from,
-        `💥 *Assistência 24h — Colisão, Acidente, Danos a Terceiros ou Incêndio*\n\n` +
-          `1️⃣ Verifique se há vítimas e acione o *192* (SAMU) ou *193* (Bombeiros) se necessário.\n` +
-          `2️⃣ Em caso de colisão ou danos, ligue para o *190* para registro da ocorrência.\n` +
-          `3️⃣ Em seguida, entre em contato com a nossa Assistência 24 horas:\n\n` +
-          `📞 *${TELEFONE_ASSISTENCIA}*\n\nEstamos aqui para te orientar e prestar todo o suporte necessário.`,
-        contexto,
-      );
+      await enviarTextoCanal(from, `💥 *Assistência 24h — Colisão, Acidente, Danos a Terceiros ou Incêndio*\n\n1️⃣ Verifique se há vítimas e acione o *192* (SAMU) ou *193* (Bombeiros) se necessário.\n2️⃣ Em caso de colisão ou danos, ligue para o *190* para registro da ocorrência.\n3️⃣ Em seguida, entre em contato com a nossa Assistência 24 horas:\n\n📞 *${TELEFONE_ASSISTENCIA}*\n\nEstamos aqui para te orientar e prestar todo o suporte necessário.`, contexto);
     } else {
-      await enviarTextoCanal(
-        from,
-        `❌ Opção inválida. Por favor, responda com *1*, *2* ou *3*:\n\n` +
-          `1️⃣ 🚨 Roubo ou Furto\n2️⃣ 🛠️ Pane, Guincho ou Chaveiro\n3️⃣ 💥 Colisão, Acidente ou Incêndio`,
-        contexto,
-      );
+      await enviarTextoCanal(from, `❌ Opção inválida. Por favor, responda com *1*, *2* ou *3*:\n\n1️⃣ 🚨 Roubo ou Furto\n2️⃣ 🛠️ Pane, Guincho ou Chaveiro\n3️⃣ 💥 Colisão, Acidente ou Incêndio`, contexto);
     }
     return;
   }
 
-  // 2. Opt-out / opt-in (melhorado)
+  // 2. Opt-out / opt-in
   const textoLimpo = texto.trim().toLowerCase();
 
   if (textoLimpo === "0" || textoLimpo === "parar") {
     usuariosOptOut.add(normalizarTelefoneBR(from));
     salvarOptOut();
     estadoUsuario[from] = null;
-
-    await enviarTextoCanal(
-      from,
-      `🚫 *Notificações desativadas com sucesso.*\n\n` +
-        `Você não receberá mais:\n` +
-        `• Lembretes de vencimento\n` +
-        `• Avisos de pendência\n\n` +
-        `Se quiser voltar a receber, digite *ativar notificações*.`,
-      contexto,
-    );
+    await enviarTextoCanal(from, `🚫 *Notificações desativadas com sucesso.*\n\nVocê não receberá mais:\n• Lembretes de vencimento\n• Avisos de pendência\n\nSe quiser voltar a receber, digite *ativar notificações*.`, contexto);
     return;
   }
 
@@ -1353,13 +1093,7 @@ if (origem === "meta" && temChatwootConfigurado()) {
     usuariosOptOut.delete(normalizarTelefoneBR(from));
     salvarOptOut();
     estadoUsuario[from] = null;
-
-    await enviarTextoCanal(
-      from,
-      `✅ *Notificações reativadas com sucesso!*\n\n` +
-        `Você voltará a receber lembretes e avisos normalmente. 📩`,
-      contexto,
-    );
+    await enviarTextoCanal(from, `✅ *Notificações reativadas com sucesso!*\n\nVocê voltará a receber lembretes e avisos normalmente. 📩`, contexto);
     return;
   }
 
@@ -1382,152 +1116,53 @@ if (origem === "meta" && temChatwootConfigurado()) {
 
   // 5. Opções do menu
   if (texto === "1") {
-    await registrarAcaoClienteChatwoot(
-  from,
-  "Opção 1 - Cotação pelo Aplicativo AVSEG",
-  contexto.conversationId
-);
-    await enviarTextoCanal(
-      from,
-      `📱 *Cotação pelo Aplicativo AVSEG*
-
-Segue o link do aplicativo AVSEG para download:
-
-🤖 Android:
-https://play.google.com/store/apps/details?id=com.avsegappcliente
-
-🍎 iOS:
-https://apps.apple.com/app/avseg-associado/id6645736685
-
-🔐 Seu usuário e senha são os números do seu CPF.
-
-Após instalar, acesse o app e siga o caminho:
-
-📋 Menu > Cotação
-
-Fico à disposição em caso de dúvidas!`,
-      contexto,
-    );
+    await registrarAcaoClienteChatwoot(from, "Opção 1 - Cotação pelo Aplicativo AVSEG", contexto.conversationId);
+    await enviarTextoCanal(from, `📱 *Cotação pelo Aplicativo AVSEG*\n\nSegue o link do aplicativo AVSEG para download:\n\n🤖 Android:\nhttps://play.google.com/store/apps/details?id=com.avsegappcliente\n\n🍎 iOS:\nhttps://apps.apple.com/app/avseg-associado/id6645736685\n\n🔐 Seu usuário e senha são os números do seu CPF.\n\nApós instalar, acesse o app e siga o caminho:\n\n📋 Menu > Cotação\n\nFico à disposição em caso de dúvidas!`, contexto);
     return;
   }
 
   if (texto === "2") {
-    await registrarAcaoClienteChatwoot(
-  from,
-  "Opção 2 - Pagamentos / 2ª via da participação mensal",
-  contexto.conversationId
-);
+    await registrarAcaoClienteChatwoot(from, "Opção 2 - Pagamentos / 2ª via da participação mensal", contexto.conversationId);
     estadoUsuario[from] = "pagamento";
-    await enviarTextoCanal(
-      from,
-      `💳 *Pagamentos — 2ª via da participação mensal*\n\nEnvie um dos dados abaixo:\n\n• 📋 CPF do titular\n• 🏢 CNPJ\n• 🚗 Placa do veículo`,
-      contexto,
-    );
+    await enviarTextoCanal(from, `💳 *Pagamentos — 2ª via da participação mensal*\n\nEnvie um dos dados abaixo:\n\n• 📋 CPF do titular\n• 🏢 CNPJ\n• 🚗 Placa do veículo`, contexto);
     return;
   }
 
   if (texto === "3") {
-    await registrarAcaoClienteChatwoot(
-  from,
-  "Opção 3 - Acionar Assistência 24h",
-  contexto.conversationId
-);
+    await registrarAcaoClienteChatwoot(from, "Opção 3 - Acionar Assistência 24h", contexto.conversationId);
     estadoUsuario[from] = "assistencia";
-    await enviarTextoCanal(
-      from,
-      `🚨 *Acione Assistência 24h*\n\nPara receber o atendimento adequado, selecione o que aconteceu:\n\n` +
-        `1️⃣ 🚨 Roubo ou Furto\n2️⃣ 🛠️ Pane, Guincho ou Chaveiro\n3️⃣ 💥 Colisão, Acidente ou Incêndio`,
-      contexto,
-    );
+    await enviarTextoCanal(from, `🚨 *Acione Assistência 24h*\n\nPara receber o atendimento adequado, selecione o que aconteceu:\n\n1️⃣ 🚨 Roubo ou Furto\n2️⃣ 🛠️ Pane, Guincho ou Chaveiro\n3️⃣ 💥 Colisão, Acidente ou Incêndio`, contexto);
     return;
   }
 
   if (texto === "4") {
-  await registrarAcaoClienteChatwoot(
-    from,
-    "Opção 4 - Vistoria pelo Aplicativo AVSEG",
-    contexto.conversationId
-  );
-
-  await enviarTextoCanal(
-    from,
-    `📱 *Vistoria pelo Aplicativo AVSEG*
-Segue o link do aplicativo AVSEG para download:
-
-🤖 Android:
-https://play.google.com/store/apps/details?id=com.avsegappcliente
-
-🍎 iOS:
-https://apps.apple.com/app/avseg-associado/id6645736685
-
-🔐 Seu usuário e senha são os números do seu CPF.
-
-Após instalar, acesse o app e siga o caminho:
-
-🔍 Menu > Vistoria > Iniciar
-
-Fico à disposição em caso de dúvidas!`,
-      contexto,
-    );
+    await registrarAcaoClienteChatwoot(from, "Opção 4 - Vistoria pelo Aplicativo AVSEG", contexto.conversationId);
+    await enviarTextoCanal(from, `📱 *Vistoria pelo Aplicativo AVSEG*\nSegue o link do aplicativo AVSEG para download:\n\n🤖 Android:\nhttps://play.google.com/store/apps/details?id=com.avsegappcliente\n\n🍎 iOS:\nhttps://apps.apple.com/app/avseg-associado/id6645736685\n\n🔐 Seu usuário e senha são os números do seu CPF.\n\nApós instalar, acesse o app e siga o caminho:\n\n🔍 Menu > Vistoria > Iniciar\n\nFico à disposição em caso de dúvidas!`, contexto);
     return;
   }
 
-  // 5 — Falar com atendente (cria conversa no Chatwoot)
   if (texto === "5") {
-    await registrarAcaoClienteChatwoot(
-  from,
-  "Opção 5 - Solicitou atendimento humano",
-  contexto.conversationId
-);
+    await registrarAcaoClienteChatwoot(from, "Opção 5 - Solicitou atendimento humano", contexto.conversationId);
     if (!estaEmHorarioAtendimento()) {
- await enviarTextoCanal(
-  from,
-  `⏰ *Atendimento humano indisponível no momento.*
-
-Nosso horário de atendimento é:
-
-🗓️ *Segunda a sexta:* 08:00 às 18:00
-🗓️ *Sábado:* 08:00 às 12:00
-🚫 *Domingo:* fechado
-
-Digite *menu* para acessar as opções automáticas.`,
-  contexto,
-);
- return;
-}
+      await enviarTextoCanal(from, `⏰ *Atendimento humano indisponível no momento.*\n\nNosso horário de atendimento é:\n\n🗓️ *Segunda a sexta:* 08:00 às 18:00\n🗓️ *Sábado:* 08:00 às 12:00\n🚫 *Domingo:* fechado\n\nDigite *menu* para acessar as opções automáticas.`, contexto);
+      return;
+    }
     modoHumano.add(from);
     estadoUsuario[from] = null;
+    await enviarTextoCanal(from, `👨‍💻 *Atendimento Humano*\n\nVocê será atendido por um de nossos especialistas em instantes. ✅\n\nSe quiser voltar ao menu automático, basta digitar *menu*.`, contexto);
 
-    await enviarTextoCanal(
-      from,
-      `👨‍💻 *Atendimento Humano*\n\nVocê será atendido por um de nossos especialistas em instantes. ✅\n\nSe quiser voltar ao menu automático, basta digitar *menu*.`,
-      contexto,
-    );
-
-    // Cria ou abre conversa no Chatwoot
     if (temChatwootConfigurado()) {
       try {
         let convId = conversationId || obterUltimoCanal(from)?.conversationId;
-
         if (!convId) {
-          // Cria nova conversa no Chatwoot
           convId = await criarConversaChatwoot(from, nomeCliente || "Cliente");
         } else {
           await abrirConversaHumanaChatwoot(convId);
         }
-
         if (convId) {
           atualizarUltimoCanal(from, { conversationId: convId });
-          // Envia nota interna no Chatwoot informando o contexto
-          await enviarTextoChatwoot(
-            convId,
-            `🤖 Cliente solicitou atendimento humano via WhatsApp.\nNúmero: +${from}`,
-            true, // nota privada
-          );
-          await enviarMensagemClienteChatwoot(
-            convId,
-            "Cliente solicitou atendimento humano pelo menu.",
-          );
+          await enviarTextoChatwoot(convId, `🤖 Cliente solicitou atendimento humano via WhatsApp.\nNúmero: +${from}`, true);
+          await enviarMensagemClienteChatwoot(convId, "Cliente solicitou atendimento humano pelo menu.");
         }
       } catch (erro) {
         console.error("❌ Erro ao criar conversa no Chatwoot:", erro.message);
@@ -1539,11 +1174,7 @@ Digite *menu* para acessar as opções automáticas.`,
   }
 
   if (texto === "6") {
-    await registrarAcaoClienteChatwoot(
-  from,
-  "Opção 6 - Avaliação de atendimento",
-  contexto.conversationId
-);
+    await registrarAcaoClienteChatwoot(from, "Opção 6 - Avaliação de atendimento", contexto.conversationId);
     await iniciarAvaliacao(from, contexto);
     return;
   }
@@ -1551,13 +1182,7 @@ Digite *menu* para acessar as opções automáticas.`,
   if (["7", "encerrar", "finalizar", "sair"].includes(texto)) {
     estadoUsuario[from] = null;
     modoHumano.delete(from);
-
-    await enviarTextoCanal(
-      from,
-      `✅ *Conversa encerrada.*\n\nFoi um prazer te atender! 😊\n\nQuando precisar, é só enviar *oi* ou *menu*. Estaremos aqui!\n\n🦁 *AVSEG Proteção Veicular*`,
-      contexto,
-    );
-
+    await enviarTextoCanal(from, `✅ *Conversa encerrada.*\n\nFoi um prazer te atender! 😊\n\nQuando precisar, é só enviar *oi* ou *menu*. Estaremos aqui!\n\n🦁 *AVSEG Proteção Veicular*`, contexto);
     const canal = obterUltimoCanal(from);
     const convId = conversationId || canal?.conversationId;
     if (convId) await marcarConversaResolvidaChatwoot(convId);
@@ -1569,40 +1194,33 @@ Digite *menu* para acessar as opções automáticas.`,
     await processarPagamento(from, bodyText, contexto);
     return;
   }
-const respostasNaturais = [
-  "obrigado",
-  "obg",
-  "valeu",
-  "amei",
-  "❤️",
-  "😍",
-  "🙏",
-  "amém",
-  "amem",
-  "Amém",
-  "Amem",
-  "parabéns",
-  "brigado",
-  "show",
-  "top",
-  "ok",
-  "okay",
-  "kkk",
-  "legal",
-  "gratidão",
-];
 
-const ehRespostaNatural = respostasNaturais.some((t) =>
-  texto.toLowerCase().includes(t)
-);
+  // Respostas naturais curtas — não responde nada (igual antes)
+  const respostasNaturais = [
+    "obrigado", "obg", "valeu", "amei", "❤️", "😍", "🙏",
+    "amém", "amem", "Amém", "Amem", "parabéns", "brigado",
+    "show", "top", "okay", "kkk", "legal", "gratidão",
+  ];
 
-if (ehRespostaNatural) {
-  return;
-}
-  // Fallback
+  const ehRespostaNatural = respostasNaturais.some((t) => texto.toLowerCase().includes(t));
+  if (ehRespostaNatural) return;
+
+  // =============================================================================
+  // FALLBACK COM IA — responde a lembretes/cobranças de forma inteligente
+  // =============================================================================
+  console.log(`🤖 Ativando IA para responder ${from}: "${bodyText || `[${msgType}]`}"`);
+
+  const respostaIA = await responderComIA(from, bodyText, msgType, contexto);
+
+  if (respostaIA) {
+    await enviarTextoCanal(from, respostaIA, contexto);
+    return;
+  }
+
+  // Fallback final se a IA falhar
   await enviarTextoCanal(
     from,
-    `Não entendi sua mensagem. 😅\n\nDigite *menu* para ver todas as opções disponíveis.`,
+    `Olá! Recebi sua mensagem. 😊\n\nPara acessar todas as opções, digite *menu*.\n\n🦁 *AVSEG Proteção Veicular*`,
     contexto,
   );
 }
@@ -1611,14 +1229,7 @@ if (ehRespostaNatural) {
 // EVENTOS — META
 // =============================================================================
 app.on("wa_message", async ({ from, bodyText, msgType, message, nomeCliente }) => {
-  await processarMensagem({
-  from,
-  bodyText,
-  origem: "meta",
-  msgType,
-  message,
-  nomeCliente,
-});
+  await processarMensagem({ from, bodyText, origem: "meta", msgType, message, nomeCliente });
 });
 
 // =============================================================================
@@ -1633,9 +1244,7 @@ app.on("chatwoot_message", async ({ from, bodyText, conversationId, raw }) => {
   });
 
   if (!modoHumano.has(from)) {
-    console.log(
-      `⏭️ Mensagem do Chatwoot ignorada: ${from} não está em atendimento humano.`,
-    );
+    console.log(`⏭️ Mensagem do Chatwoot ignorada: ${from} não está em atendimento humano.`);
     return;
   }
 
@@ -1646,53 +1255,35 @@ app.on("chatwoot_message", async ({ from, bodyText, conversationId, raw }) => {
 
   try {
     await enviarTexto(from, bodyText);
-
-    registrarLogConversa({
-      telefone: from,
-      nome: "Atendente",
-      origem: "atendente",
-      tipo: "text",
-      mensagem: bodyText,
-      conversationId,
-    });
-
+    registrarLogConversa({ telefone: from, nome: "Atendente", origem: "atendente", tipo: "text", mensagem: bodyText, conversationId });
     console.log(`✅ Mensagem do atendente enviada para WhatsApp: ${from}`);
   } catch (erro) {
-    console.error(
-      "❌ Erro ao enviar mensagem do Chatwoot para WhatsApp:",
-      erro.response?.data || erro.message,
-    );
+    console.error("❌ Erro ao enviar mensagem do Chatwoot para WhatsApp:", erro.response?.data || erro.message);
   }
 });
 
 // =============================================================================
-// CRON — NOTIFICAÇÕES DIÁRIAS (09:00)
+// CRON — NOTIFICAÇÕES DIÁRIAS
 // =============================================================================
 function ehDiaDePico() {
   const hoje = new Date();
-  // Ajuste UTC-3 Brasil
   const diaBrasil = new Date(hoje.getTime() - 3 * 60 * 60 * 1000).getDate();
-  
-  // Dias com notificações: 5 dias antes, 2 dias antes, 4 depois, 15 depois
-  // dos vencimentos 10, 20 e 30
   const diasAtivos = [5, 8, 10, 14, 15, 18, 20, 24, 25, 28, 30, 3, 4];
-  
   return diasAtivos.includes(diaBrasil);
 }
+
 if (ENABLE_CRON) {
   cron.schedule("0 11-23,0-1 * * *", async () => {
-  if (!ehDiaDePico()) {
-  console.log("📅 Dia sem pico — mantendo envio normal com limite por hora.");
-}
-  
-  console.log("⏰ Iniciando rotina de notificações diárias...");
+    if (!ehDiaDePico()) {
+      console.log("📅 Dia sem pico — mantendo envio normal com limite por hora.");
+    }
+
+    console.log("⏰ Iniciando rotina de notificações diárias...");
     const http = axiosInterno();
 
     try {
       const resposta = await http.get("/notificacoes-pendentes");
-      const notificacoes = Array.isArray(resposta.data?.notificacoes)
-        ? resposta.data.notificacoes
-        : [];
+      const notificacoes = Array.isArray(resposta.data?.notificacoes) ? resposta.data.notificacoes : [];
 
       console.log(`📋 Total de notificações: ${notificacoes.length}`);
       console.log("📊 Resumo:", JSON.stringify(resposta.data?.resumo || {}));
@@ -1702,9 +1293,7 @@ if (ENABLE_CRON) {
         if (!telefone) continue;
 
         if (!podeEnviar(telefone)) {
-          console.log(
-            `🧪 TEST_MODE ativo: template bloqueado para ${telefone}`,
-          );
+          console.log(`🧪 TEST_MODE ativo: template bloqueado para ${telefone}`);
           continue;
         }
 
@@ -1726,12 +1315,7 @@ if (ENABLE_CRON) {
         }
 
         const parametros = montarParametrosTemplate(item);
-
-        const controleEnvio = podeEnviarTemplateSeguro(
-          item,
-          telefone,
-          templateName,
-        );
+        const controleEnvio = podeEnviarTemplateSeguro(item, telefone, templateName);
 
         if (!controleEnvio.permitido) {
           console.log(`⏭️ Template bloqueado: ${controleEnvio.motivo}`);
@@ -1751,35 +1335,27 @@ if (ENABLE_CRON) {
             template: templateName,
           });
           registrarLogConversa({
-  telefone,
-  nome: item.nome || "Associado",
-  origem: "bot",
-  tipo: "template",
-  mensagem: templateName,
-  status: "enviado",
-  sistema: item.sistema || "ND",
-});
+            telefone,
+            nome: item.nome || "Associado",
+            origem: "bot",
+            tipo: "template",
+            mensagem: templateName,
+            status: "enviado",
+            sistema: item.sistema || "ND",
+          });
           registrarEnvioTemplate(controleEnvio);
 
           const espera = delayAleatorioTemplate();
-          console.log(
-            `⏳ Aguardando ${Math.round(espera / 1000)}s antes do próximo envio...`,
-          );
+          console.log(`⏳ Aguardando ${Math.round(espera / 1000)}s antes do próximo envio...`);
           await delay(espera);
         } catch (erro) {
-          console.error(
-            `❌ Erro ao enviar template ${templateName} para ${telefone}:`,
-            erro.response?.data || erro.message,
-          );
+          console.error(`❌ Erro ao enviar template ${templateName} para ${telefone}:`, erro.response?.data || erro.message);
         }
       }
 
       console.log("✅ Rotina de notificações concluída.");
     } catch (erro) {
-      console.error(
-        "❌ Erro na rotina de notificações:",
-        erro.response?.data || erro.message,
-      );
+      console.error("❌ Erro na rotina de notificações:", erro.response?.data || erro.message);
     }
   });
 
@@ -1802,9 +1378,7 @@ function protegerRotaInterna(req, res, next) {
 app.get("/avaliacoes", protegerRotaInterna, (req, res) => {
   const media =
     avaliacoes.length > 0
-      ? (
-          avaliacoes.reduce((s, a) => s + a.nota, 0) / avaliacoes.length
-        ).toFixed(2)
+      ? (avaliacoes.reduce((s, a) => s + a.nota, 0) / avaliacoes.length).toFixed(2)
       : null;
   res.json({ total: avaliacoes.length, media, avaliacoes });
 });
@@ -1814,12 +1388,7 @@ app.get("/modo-humano", protegerRotaInterna, (req, res) => {
 });
 
 app.get("/canais", protegerRotaInterna, (req, res) => {
-  res.json({
-    total: Object.keys(ultimoCanalPorNumero).length,
-    canais: ultimoCanalPorNumero,
-  });
+  res.json({ total: Object.keys(ultimoCanalPorNumero).length, canais: ultimoCanalPorNumero });
 });
 
-console.log(
-  `🤖 Bot iniciado. TEST_MODE=${TEST_MODE ? "ON" : "OFF"} | CHATWOOT=${temChatwootConfigurado() ? "ON" : "OFF"}`,
-);
+console.log(`🤖 Bot iniciado. TEST_MODE=${TEST_MODE ? "ON" : "OFF"} | CHATWOOT=${temChatwootConfigurado() ? "ON" : "OFF"}`);
