@@ -1021,6 +1021,7 @@ async function processarPagamento(from, bodyText, contexto = {}) {
 // PROCESSAMENTO CENTRAL DE MENSAGENS
 // =============================================================================
 async function processarMensagem({ from, bodyText, origem = "meta", conversationId = null, msgType = "text", message = null, nomeCliente = "Cliente" }) {
+
   const texto = String(bodyText || "").toLowerCase().trim();
   const http = axiosInterno();
   const contexto = { origem, conversationId };
@@ -1195,15 +1196,23 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
     return;
   }
 
-  // Respostas naturais curtas — não responde nada (igual antes)
+  // Mensagens que registram e espelham no Chatwoot mas o bot não responde
   const respostasNaturais = [
     "obrigado", "obg", "valeu", "amei", "❤️", "😍", "🙏",
     "amém", "amem", "Amém", "Amem", "parabéns", "brigado",
     "show", "top", "okay", "kkk", "legal", "gratidão",
+    "👍", "👏", "😊", "🙌",
+    "certo", "entendi", "ok", "blz", "beleza", "perfeito", "ótimo", "massa",
   ];
 
-  const ehRespostaNatural = respostasNaturais.some((t) => texto.toLowerCase().includes(t));
-  if (ehRespostaNatural) return;
+  const ehRespostaNatural =
+    msgType === "reaction" ||
+    respostasNaturais.some((t) => texto.toLowerCase().includes(t));
+
+  if (ehRespostaNatural) {
+    console.log(`⏭️ Mensagem ignorada pelo bot (natural/reaction): ${from}`);
+    return;
+  }
 
   // =============================================================================
   // FALLBACK COM IA — responde a lembretes/cobranças de forma inteligente
