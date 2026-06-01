@@ -1051,7 +1051,13 @@ async function processarPagamento(from, bodyText, contexto = {}) {
 // PROCESSAMENTO CENTRAL DE MENSAGENS
 // =============================================================================
 async function processarMensagem({ from, bodyText, origem = "meta", conversationId = null, msgType = "text", message = null, nomeCliente = "Cliente" }) {
-
+  console.log(
+    "📨 NOVA MSG:",
+    new Date().toISOString(),
+    from,
+    msgType,
+    bodyText
+  );
   const texto = String(bodyText || "").toLowerCase().trim();
   const http = axiosInterno();
   const contexto = { origem, conversationId };

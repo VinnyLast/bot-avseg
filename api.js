@@ -391,6 +391,32 @@ app.post("/webhook", async (req, res) => {
 app.post("/chatwoot-bot", async (req, res) => {
   try {
     const body = req.body;
+    global.chatwootMensagensEnviadas ??= new Set();
+
+const messageId =
+  body.id ||
+  body.message?.id ||
+  body.messages?.[0]?.id;
+
+if (messageId && global.chatwootMensagensEnviadas.has(messageId)) {
+  console.log(`⚠️ Mensagem Chatwoot duplicada ignorada: ${messageId}`);
+
+  return res.status(200).json({
+    ok: true,
+    ignored: "duplicate_chatwoot_message",
+  });
+}
+
+if (messageId) {
+  global.chatwootMensagensEnviadas.add(messageId);
+
+  if (global.chatwootMensagensEnviadas.size > 1000) {
+    const primeiro =
+      global.chatwootMensagensEnviadas.values().next().value;
+
+    global.chatwootMensagensEnviadas.delete(primeiro);
+  }
+}
 
     console.log("📩 WEBHOOK CHATWOOT:");
     console.log(JSON.stringify(body, null, 2));
@@ -409,7 +435,15 @@ app.post("/chatwoot-bot", async (req, res) => {
 
     const senderType =
       body.sender?.type || body.message?.sender?.type || body.sender_type || "";
-
+    if (
+  body.source_id ||
+  body.message?.source_id
+) {
+  return res.status(200).json({
+    ok: true,
+    ignored: "originated_from_whatsapp"
+  });
+}
     // Ignora notas privadas
     if (body.private === true || body.message?.private === true) {
       return res.status(200).json({ ok: true, ignored: "private_note" });
@@ -437,7 +471,18 @@ app.post("/chatwoot-bot", async (req, res) => {
       return res.status(200).json({ ok: true, ignored: "sem telefone ou conteúdo" });
     }
 
-    if (messageType === "outgoing") {
+    if (
+  messageType === "outgoing" &&
+  event === "message_created"
+) {
+      console.log("📤 CHATWOOT → WHATSAPP");
+console.log({
+  messageId,
+  telefone,
+  content,
+  messageType,
+  event
+});
       await enviarTexto(telefone, content);
       return res.status(200).json({ ok: true, sent_to_whatsapp: telefone });
     }
