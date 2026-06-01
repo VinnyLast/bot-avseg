@@ -396,59 +396,73 @@ app.post("/chatwoot-bot", async (req, res) => {
     console.log(JSON.stringify(body, null, 2));
 
     const event = body.event;
-    const messageType = body.message_type || body.message?.message_type;
-    const content = body.content || body.message?.content || "";
 
-    const conversation = body.conversation || body.message?.conversation || {};
+    // Normaliza campos — o Chatwoot dispara dois formatos de evento:
+    // 1. Evento de mensagem: campos no root (content, message_type, sender, etc.)
+    // 2. Evento de conversa: campos dentro de body.messages[0]
+    const mensagem = body.message || (Array.isArray(body.messages) ? body.messages[0] : null) || {};
+
+    const messageType = body.message_type ?? mensagem.message_type;
+    // message_type 0 = incoming (cliente), 1 = outgoing (bot/atendente)
+    const messageTypeNome = messageType === 0 ? "incoming" : messageType === 1 ? "outgoing" : String(messageType || "");
+
+    const content = body.content || mensagem.content || "";
+    const sourceId = body.source_id || mensagem.source_id || null;
+
+    const conversation = body.conversation || {};
     const contact =
       body.contact ||
       body.sender ||
       conversation.contact ||
-      body.conversation?.contact ||
+      conversation.meta?.sender ||
       {};
 
     const senderType =
-      body.sender?.type || body.message?.sender?.type || body.sender_type || "";
+      body.sender?.type || mensagem.sender?.type || body.sender_type || "";
 
     // Ignora notas privadas
-    if (body.private === true || body.message?.private === true) {
+    if (body.private === true || mensagem.private === true) {
       return res.status(200).json({ ok: true, ignored: "private_note" });
     }
 
-    if (messageType === "incoming") {
+    // Ignora incoming — são espelhos do que já veio pelo WhatsApp
+    if (messageTypeNome === "incoming") {
       return res.status(200).json({
         ok: true,
-        ignored: "incoming_chatwoot_ignored_to_prevent_loop",
+        ignored: "incoming_ignored_to_prevent_loop",
         event,
-        senderType,
       });
+    }
+
+    // Ignora outgoing sem source_id — são mensagens enviadas pelo próprio bot
+    // Mensagens de atendentes humanos têm source_id ou senderType "agent"
+    if (messageTypeNome === "outgoing") {
+      const ehAtendente = senderType === "agent" || senderType === "user";
+      const temSourceId = Boolean(sourceId);
+
+      if (!ehAtendente && !temSourceId) {
+        return res.status(200).json({ ok: true, ignored: "outgoing_bot_ignored_to_prevent_duplicate" });
+      }
     }
 
     const phoneRaw =
       contact.phone_number ||
       contact.phone ||
       conversation.meta?.sender?.phone_number ||
-      body.conversation?.meta?.sender?.phone_number ||
       "";
 
     const telefone = normalizarTelefoneBR(phoneRaw);
 
     if (!telefone || !content) {
-      return res.status(200).json({ ok: true, ignored: "sem telefone ou conteúdo" });
+      return res.status(200).json({ ok: true, ignored: "sem telefone ou conteudo" });
     }
 
-    if (messageType === "outgoing") {
-      // Ignora mensagens outgoing enviadas pelo próprio bot (evita duplicata)
-      // Só repassa para o WhatsApp se for de um atendente humano (agent)
-      const ehAtendente = senderType === "agent" || senderType === "user";
-      if (!ehAtendente) {
-        return res.status(200).json({ ok: true, ignored: "outgoing_bot_ignored_to_prevent_duplicate" });
-      }
+    if (messageTypeNome === "outgoing") {
       await enviarTexto(telefone, content);
       return res.status(200).json({ ok: true, sent_to_whatsapp: telefone });
     }
 
-    return res.status(200).json({ ok: true, ignored: `message_type ${messageType}` });
+    return res.status(200).json({ ok: true, ignored: `event ${event} ignored` });
   } catch (erro) {
     console.error("❌ Erro no webhook Chatwoot:", erro.response?.data || erro.message);
     return res.status(500).json({ ok: false, erro: erro.message });
