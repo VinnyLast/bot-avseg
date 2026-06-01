@@ -437,10 +437,9 @@ app.post("/chatwoot-bot", async (req, res) => {
     // Ignora outgoing sem source_id — são mensagens enviadas pelo próprio bot
     // Mensagens de atendentes humanos têm source_id ou senderType "agent"
     if (messageTypeNome === "outgoing") {
-      const ehAtendente = senderType === "agent" || senderType === "user";
-      const temSourceId = Boolean(sourceId);
-
-      if (!ehAtendente && !temSourceId) {
+      // source_id null = mensagem enviada pelo bot via API do Chatwoot
+      // source_id preenchido = mensagem de atendente humano
+      if (!sourceId) {
         return res.status(200).json({ ok: true, ignored: "outgoing_bot_ignored_to_prevent_duplicate" });
       }
     }
