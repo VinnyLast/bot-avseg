@@ -743,6 +743,15 @@ async function enviarTextoCanal(from, texto, contexto = {}) {
     await enviarTexto(numero, texto);
     console.log(`✅ Texto enviado para ${numero}`);
 
+    // Registra no log
+    registrarLogConversa({
+      telefone: numero,
+      nome: "Bot",
+      origem: "bot",
+      tipo: "text",
+      mensagem: texto,
+    });
+
     // Espelha no Chatwoot apenas se houver conversa ativa (cliente já interagiu)
     if (temChatwootConfigurado()) {
       const conversationId = contexto.conversationId || obterUltimoCanal(numero)?.conversationId;
@@ -767,6 +776,27 @@ async function enviarImagemCanal(from, imageUrl, caption = "", contexto = {}) {
   try {
     await enviarImagem(numero, imageUrl, caption);
     console.log(`✅ Imagem enviada para ${numero}`);
+
+    // Espelha no Chatwoot se houver conversa ativa (envia o caption como texto)
+    if (temChatwootConfigurado()) {
+      const conversationId = contexto.conversationId || obterUltimoCanal(numero)?.conversationId;
+      if (conversationId && caption) {
+        try {
+          await enviarTextoChatwoot(conversationId, caption, false);
+        } catch (erroChatwoot) {
+          console.warn(`⚠️ Não foi possível espelhar imagem no Chatwoot:`, erroChatwoot.message);
+        }
+      }
+    }
+
+    // Registra no log
+    registrarLogConversa({
+      telefone: numero,
+      nome: "Bot",
+      origem: "bot",
+      tipo: "image",
+      mensagem: caption ? caption.slice(0, 100) + (caption.length > 100 ? "..." : "") : "[imagem]",
+    });
   } catch (erro) {
     console.error("Erro enviando imagem:", erro.response?.data || erro.message);
     if (caption) await enviarTextoCanal(numero, caption, contexto);
