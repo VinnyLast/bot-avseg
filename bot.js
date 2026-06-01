@@ -328,93 +328,6 @@ function montarHeadersChatwoot() {
 }
 
 // =============================================================================
-// IA — RESPOSTA INTELIGENTE VIA ANTHROPIC
-// =============================================================================
-
-/**
- * Usa a API da Anthropic para interpretar mensagens fora do fluxo do menu
- * (respostas a lembretes e cobranças) e gerar uma resposta natural.
- */
-async function responderComIA(from, bodyText, msgType, contexto = {}) {
-  try {
-    const ehMidia = msgType !== "text";
-
-    // Monta o conteúdo da mensagem para a IA
-    const mensagemCliente = ehMidia
-      ? `[O cliente enviou um ${msgType === "image" ? "comprovante/imagem" : msgType}]${bodyText ? `: ${bodyText}` : ""}`
-      : bodyText;
-
-    const systemPrompt = `Você é um assistente virtual da AVSEG Proteção Veicular, empresa de proteção de veículos localizada em Feira de Santana, Bahia.
-
-Você está respondendo a um cliente que recebeu um lembrete ou cobrança automática e respondeu fora do menu principal do WhatsApp.
-
-Seu objetivo é interpretar a mensagem do cliente e responder de forma natural, cordial e profissional em português brasileiro.
-
-Diretrizes:
-- Se o cliente disser que já pagou ("já paguei", "paguei hoje", "efetuei o pagamento", etc): agradeça, diga que o pagamento pode levar até 2 dias úteis para ser processado e que a proteção continua ativa.
-- Se o cliente enviar comprovante ou imagem: agradeça pelo envio, informe que será verificado e que a proteção continua ativa.
-- Se o cliente responder com "ok", "👍", "certo", "entendido" ou similar: agradeça a confirmação de forma breve e cordial.
-- Se o cliente reclamar do valor, prazo ou cobrança: demonstre empatia, explique que pode buscar a segunda via pelo menu e sugira digitar "menu".
-- Se o cliente pedir para falar com atendente: informe que pode digitar "5" no menu para ser atendido por um especialista.
-- Se o cliente disser que vai pagar: encoraje e informe que pode obter a segunda via digitando "menu".
-- Se não conseguir interpretar: responda de forma amigável e sugira digitar "menu".
-
-Sempre finalize sugerindo digitar "menu" se precisar de mais ajuda, exceto em respostas muito curtas onde não faz sentido.
-Mantenha respostas curtas e objetivas — no máximo 4 linhas.
-Não use asteriscos para negrito no início de frases de agradecimento.
-Assine como: AVSEG Proteção Veicular`;
-
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 300,
-        system: systemPrompt,
-        messages: [
-          {
-            role: "user",
-            content: mensagemCliente,
-          },
-        ],
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error("❌ Erro na API Anthropic:", data);
-      return null;
-    }
-
-    const textoResposta = data?.content?.[0]?.text?.trim();
-
-    if (!textoResposta) return null;
-
-    // Registra no log o que a IA interpretou
-    registrarLogConversa({
-      telefone: normalizarTelefoneBR(from),
-      nome: "IA",
-      origem: "bot_ia",
-      tipo: "ia_resposta",
-      mensagem: textoResposta,
-      mensagemOriginal: bodyText || `[${msgType}]`,
-    });
-
-    console.log(`🤖 IA respondeu para ${from}: ${textoResposta.slice(0, 80)}...`);
-
-    return textoResposta;
-  } catch (erro) {
-    console.error("❌ Erro ao chamar IA:", erro.message);
-    return null;
-  }
-}
-
-// =============================================================================
 // CHATWOOT — API
 // =============================================================================
 async function criarOuBuscarContatoChatwoot(telefone, nome = "Cliente") {
@@ -1051,13 +964,7 @@ async function processarPagamento(from, bodyText, contexto = {}) {
 // PROCESSAMENTO CENTRAL DE MENSAGENS
 // =============================================================================
 async function processarMensagem({ from, bodyText, origem = "meta", conversationId = null, msgType = "text", message = null, nomeCliente = "Cliente" }) {
-  console.log(
-    "📨 NOVA MSG:",
-    new Date().toISOString(),
-    from,
-    msgType,
-    bodyText
-  );
+
   const texto = String(bodyText || "").toLowerCase().trim();
   const http = axiosInterno();
   const contexto = { origem, conversationId };
@@ -1250,22 +1157,12 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
     return;
   }
 
-  // =============================================================================
-  // FALLBACK COM IA — responde a lembretes/cobranças de forma inteligente
-  // =============================================================================
-  console.log(`🤖 Ativando IA para responder ${from}: "${bodyText || `[${msgType}]`}"`);
-
-  const respostaIA = await responderComIA(from, bodyText, msgType, contexto);
-
-  if (respostaIA) {
-    await enviarTextoCanal(from, respostaIA, contexto);
-    return;
-  }
-
-  // Fallback final se a IA falhar
+  // Fallback — não entendeu a mensagem
   await enviarTextoCanal(
     from,
-    `Olá! Recebi sua mensagem. 😊\n\nPara acessar todas as opções, digite *menu*.\n\n🦁 *AVSEG Proteção Veicular*`,
+    `Não entendi sua mensagem. 😅
+
+Digite *menu* para ver todas as opções disponíveis.`,
     contexto,
   );
 }
