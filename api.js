@@ -354,7 +354,19 @@ app.post("/webhook", async (req, res) => {
   const message = value.messages[0];
   const from = normalizarTelefoneBR(message.from);
   const msgType = message.type;
-  const bodyText = message.text?.body?.trim() || "";
+
+  // Extrai bodyText — para mensagens interativas (list_reply, button_reply)
+  // usa o ID da opção selecionada como se fosse texto digitado
+  let bodyText = message.text?.body?.trim() || "";
+  if (msgType === "interactive") {
+    const listReply = message.interactive?.list_reply;
+    const buttonReply = message.interactive?.button_reply;
+    if (listReply?.id) {
+      bodyText = listReply.id; // ex: "2"
+    } else if (buttonReply?.id) {
+      bodyText = buttonReply.id;
+    }
+  }
   const midiaDashboard = await salvarMidiaWhatsappParaDashboard(message);
 
   registrarLogConversa({
