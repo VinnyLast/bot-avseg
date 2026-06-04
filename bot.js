@@ -19,6 +19,8 @@ const {
   enviarTexto,
   enviarImagem,
   enviarTemplate,
+  enviarListaMenu,
+  gerarLinkCurto,
   normalizarTelefoneBR,
   registrarLogNotificacao,
   registrarLogConversa,
@@ -145,6 +147,9 @@ function salvarOptOut() {
   salvarJson(ARQUIVO_OPTOUT, [...usuariosOptOut]);
 }
 
+// Templates que suportam botão de URL
+const TEMPLATES_COM_BOTAO = ["lembrete_5", "lembrete_2", "cobranca_3"];
+
 function montarParametrosTemplate(item) {
   if (item.tipo === "aniversario") {
     return [item.nome || "Associado"];
@@ -154,6 +159,13 @@ function montarParametrosTemplate(item) {
     item.placa || "ND",
     formatarDataBR(item.vencimento),
   ];
+}
+
+function montarUrlBotaoTemplate(item) {
+  if (!TEMPLATES_COM_BOTAO.includes(item.tipo)) return null;
+  const urlReal = item.url && item.url !== "ND" ? item.url : null;
+  if (!urlReal) return null;
+  return gerarLinkCurto(urlReal);
 }
 
 function delayAleatorioTemplate() {
@@ -732,26 +744,51 @@ function montarOpcoesMenu() {
 }
 
 async function enviarMenu(numero, cliente, contexto = {}) {
-  let saudacao = `🦁 *AVSEG Proteção Veicular*\n\n`;
+  let bodyText = `Olá`;
 
   if (cliente && !cliente.erro && Array.isArray(cliente.veiculos) && cliente.veiculos.length) {
-    saudacao += `Olá *${cliente.nome || "Associado"}*! 👋\n\n🚗 *Seus veículos:*\n\n`;
-    cliente.veiculos.forEach((v, i) => {
-      saudacao += `${i + 1}️⃣ Placa: ${v.placa || "ND"}\n📅 Vencimento: ${v.vencimento || "ND"}\n\n`;
+    bodyText = `Olá, *${cliente.nome || "Associado"}*! 👋\n\nSeus veículos:\n`;
+    cliente.veiculos.forEach((v) => {
+      bodyText += `🚗 ${v.placa || "ND"} — Vence: ${v.vencimento || "ND"}\n`;
     });
+    bodyText += `\nComo posso te ajudar hoje?`;
   } else {
-    saudacao += `Olá! Seja bem-vindo(a)! 👋\n\n`;
+    bodyText = `Olá! Seja bem-vindo(a) à AVSEG Proteção Veicular! 👋\n\nComo posso te ajudar hoje?`;
   }
 
-  saudacao += `Como posso te ajudar hoje?\n\n`;
-  saudacao += montarOpcoesMenu();
-  saudacao += `\n\n──────────────────\n`;
-  saudacao += `📸 *Instagram:* ${INSTAGRAM}\n`;
-  saudacao += `📍 *Localização:* ${LOCALIZACAO}\n`;
-  saudacao += `⭐ *Google:* 4,7 — 63 avaliações\n`;
-  saudacao += `\n_(Para parar notificações automáticas, responda *0*)_`;
+  const sections = [
+    {
+      title: "Opções",
+      rows: [
+        { id: "1", title: "Cotação", description: "Solicitar cotação pelo app AVSEG" },
+        { id: "2", title: "Pagamentos", description: "2ª via da participação mensal" },
+        { id: "3", title: "Assistência 24h", description: "Acionar assistência emergencial" },
+        { id: "4", title: "Vistoria do veículo", description: "Realizar vistoria pelo app" },
+        { id: "5", title: "Falar com atendente", description: "Atendimento humano especializado" },
+        { id: "6", title: "Avaliar atendimento", description: "Deixe sua avaliação" },
+        { id: "7", title: "Encerrar conversa", description: "Finalizar o atendimento" },
+      ],
+    },
+  ];
 
-  await enviarImagemCanal(numero, IMAGEM_BOAS_VINDAS, saudacao, contexto);
+  const resultado = await enviarListaMenu(
+    numero,
+    "🦁 AVSEG Proteção Veicular",
+    bodyText,
+    "_(Para parar notificações, responda 0)_",
+    sections,
+  );
+
+  // Fallback para texto se lista falhar
+  if (!resultado) {
+    let saudacao = `🦁 *AVSEG Proteção Veicular*\n\n${bodyText}\n\n`;
+    saudacao += montarOpcoesMenu();
+    saudacao += `\n\n──────────────────\n`;
+    saudacao += `📸 *Instagram:* ${INSTAGRAM}\n`;
+    saudacao += `📍 *Localização:* ${LOCALIZACAO}\n`;
+    saudacao += `\n_(Para parar notificações automáticas, responda *0*)_`;
+    await enviarImagemCanal(numero, IMAGEM_BOAS_VINDAS, saudacao, contexto);
+  }
 }
 
 // =============================================================================
@@ -1265,7 +1302,8 @@ if (ENABLE_CRON) {
         }
 
         try {
-          await enviarTemplate(telefone, templateName, parametros);
+          const urlBotao = montarUrlBotaoTemplate(item);
+          await enviarTemplate(telefone, templateName, parametros, urlBotao);
           registrarLogNotificacao({
             telefone,
             nome: item.nome || "Associado",

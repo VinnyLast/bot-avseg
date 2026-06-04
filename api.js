@@ -13,6 +13,7 @@ const ARQUIVO_LOG_AVALIACOES = path.join(__dirname, "logs_avaliacoes.json");
 const ARQUIVO_OPTOUT = path.join(__dirname, "usuarios_optout.json");
 const ARQUIVO_ENVIOS = path.join(__dirname, "envios_templates.json");
 const ARQUIVO_LOG_CONVERSAS = path.join(__dirname, "logs_conversas.json");
+const ARQUIVO_BOLETOS_REDIRECT = path.join(__dirname, "boletos_redirect.json");
 const PASTA_UPLOADS_WHATSAPP = path.join(__dirname, "public", "uploads-whatsapp");
 
 fs.mkdirSync(PASTA_UPLOADS_WHATSAPP, { recursive: true });
@@ -1511,11 +1512,82 @@ app.get("/dashboard/conversas", protegerRotaInterna, (req, res) => {
   res.json(carregarJson(ARQUIVO_LOG_CONVERSAS, []).slice(0, 300));
 });
 
+// =============================================================================
+// REDIRECIONADOR DE BOLETOS — /b/:id
+// =============================================================================
+function gerarIdCurto() {
+  return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
+
+function gerarLinkCurto(urlReal) {
+  if (!urlReal || urlReal === "ND") return null;
+
+  const redirects = carregarJson(ARQUIVO_BOLETOS_REDIRECT, {});
+  const id = gerarIdCurto();
+  redirects[id] = {
+    url: urlReal,
+    criadoEm: new Date().toISOString(),
+  };
+  salvarJson(ARQUIVO_BOLETOS_REDIRECT, redirects);
+  return `https://bot-avseg.cloud/b/${id}`;
+}
+
+// Rota pública — redireciona para URL real do boleto
+app.get("/b/:id", (req, res) => {
+  const redirects = carregarJson(ARQUIVO_BOLETOS_REDIRECT, {});
+  const entrada = redirects[req.params.id];
+
+  if (!entrada?.url) {
+    return res.status(404).send("Link não encontrado ou expirado.");
+  }
+
+  return res.redirect(302, entrada.url);
+});
+
+// =============================================================================
+// MENSAGEM INTERATIVA — LIST MESSAGE (menu principal)
+// =============================================================================
+async function enviarListaMenu(to, headerText, bodyText, footerText, sections) {
+  try {
+    const response = await axios.post(
+      `https://graph.facebook.com/v25.0/${WA_PHONE_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "interactive",
+        interactive: {
+          type: "list",
+          header: { type: "text", text: headerText },
+          body: { text: bodyText },
+          footer: { text: footerText },
+          action: {
+            button: "Ver opções",
+            sections,
+          },
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${WA_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      },
+    );
+
+    console.log(`✅ LISTA ENVIADA para ${to}:`, response.data);
+    return response.data;
+  } catch (erro) {
+    console.error("❌ ERRO LISTA:", erro.response?.data || erro.message);
+    return null;
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`✅ API rodando na porta ${PORT}`);
 });
 
-async function enviarTemplate(to, templateName, parametros = []) {
+async function enviarTemplate(to, templateName, parametros = [], urlBotao = null) {
   try {
     const components = [];
 
@@ -1527,6 +1599,19 @@ async function enviarTemplate(to, templateName, parametros = []) {
           text: String(p || ""),
         })),
       });
+    }
+
+    // Botão de URL dinâmica (sufixo após a URL base configurada no template)
+    if (urlBotao) {
+      try {
+        const sufixo = urlBotao.replace(/^https?:\/\/[^/]+\/b\//, "");
+        components.push({
+          type: "button",
+          sub_type: "url",
+          index: "0",
+          parameters: [{ type: "text", text: sufixo }],
+        });
+      } catch (_) {}
     }
 
     const response = await axios.post(
@@ -1576,6 +1661,8 @@ module.exports = {
   enviarTexto,
   enviarImagem,
   enviarTemplate,
+  enviarListaMenu,
+  gerarLinkCurto,
   normalizarTelefoneBR,
   registrarLogNotificacao,
   registrarLogConversa,
