@@ -584,7 +584,14 @@ function montarMensagemBoleto(veiculo) {
 }
 
 function montarMensagemSemResultado(entrada) {
-  return `❌ *Nenhum boleto encontrado* para *${entrada || "informado"}*.\n\nConfira os dados e tente novamente.`;
+  return (
+    `⚠️ Não encontrei nenhuma participação mensal em aberto para *${entrada || "informado"}*.\n\n` +
+    `Isso pode significar que:\n` +
+    `• ✅ O pagamento já foi realizado\n` +
+    `• 📋 Os dados informados são de outro titular\n` +
+    `• 🕐 O boleto ainda não foi gerado\n\n` +
+    `Se precisar de ajuda, digite *5* para falar com um atendente ou *menu* para ver todas as opções.`
+  );
 }
 
 // =============================================================================
