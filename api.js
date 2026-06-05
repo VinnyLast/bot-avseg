@@ -290,7 +290,8 @@ function formatarValorBR(valor) {
 // =============================================================================
 // FILTRO — apenas vencimentos nos dias 10, 20 e 30
 // =============================================================================
-const DIAS_VENCIMENTO_PERMITIDOS = [10, 20, 30];
+// 28 e 31 cobrem meses curtos onde dia 30 cai em 28 (fevereiro) ou 31 (meses longos)
+const DIAS_VENCIMENTO_PERMITIDOS = [10, 20, 28, 30, 31];
 
 function diaDoVencimento(vencimento) {
   if (!vencimento || vencimento === "ND") return null;
@@ -877,6 +878,26 @@ async function i9BuscarVencimentos(dataAlvo, tipoNotificacao) {
 }
 
 // =============================================================================
+// I9 — BUSCA URL DO BOLETO POR PLACA (fallback para cobranca_3 sem URL)
+// =============================================================================
+async function i9BuscarUrlPorPlaca(placa) {
+  try {
+    const dados = await consultarBoletoI9({ tipo: 1, placa });
+    const veiculos = Array.isArray(dados?.veiculos) ? dados.veiculos : [];
+
+    for (const v of veiculos) {
+      const norm = normalizarVeiculoI9(v);
+      if (norm.url && norm.url !== "ND") return norm.url;
+      if (norm.linhadigitavel && norm.linhadigitavel !== "ND") return null; // tem linha mas sem URL
+    }
+    return null;
+  } catch (erro) {
+    console.warn(`⚠️ I9 busca URL por placa ${placa}:`, erro.message);
+    return null;
+  }
+}
+
+// =============================================================================
 // SOUTH
 // =============================================================================
 function temResultadoSouth(dados) {
@@ -1418,8 +1439,29 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
       }
     }
 
+    // Busca URL por placa para itens do I9 com cobranca_3 sem URL
+    const unicasComUrl = await Promise.all(
+      unicas.map(async (item) => {
+        if (
+          item.sistema === "i9" &&
+          item.tipo === "cobranca_3" &&
+          (!item.url || item.url === "ND") &&
+          item.placa &&
+          item.placa !== "ND"
+        ) {
+          console.log(`🔍 I9 cobranca_3 sem URL — buscando por placa: ${item.placa}`);
+          const urlExtra = await i9BuscarUrlPorPlaca(item.placa);
+          if (urlExtra) {
+            console.log(`✅ URL encontrada para ${item.placa}: ${urlExtra}`);
+            return { ...item, url: urlExtra };
+          }
+        }
+        return item;
+      })
+    );
+
     return res.json({
-      total: unicas.length,
+      total: unicasComUrl.length,
       datas: {
         hoje: hoje.format("YYYY-MM-DD"),
         lembrete_5: d5,
@@ -1445,7 +1487,7 @@ app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
           cobranca_15: i9ListAtraso15.length,
         },
       },
-      notificacoes: unicas,
+      notificacoes: unicasComUrl,
     });
   } catch (erro) {
     console.error("Erro em /notificacoes-pendentes:", erro.message);
