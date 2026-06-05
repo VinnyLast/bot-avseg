@@ -15,7 +15,6 @@
         <h1>Dashboard AVSEG Bot</h1>
         <p>Painel operacional do atendimento e notificações</p>
       </div>
-
       <div class="topbar-info">
         <span class="status-dot"></span>
         <span>Atualização automática a cada 10 segundos</span>
@@ -39,42 +38,25 @@
         <div class="card"><span>Envios registrados</span><strong id="enviosRegistrados">0</strong></div>
         <div class="card"><span>Avaliações hoje</span><strong id="avaliacoesHoje">0</strong></div>
         <div class="card"><span>Média geral</span><strong id="mediaAvaliacoes">0.0</strong></div>
-        <div class="card">
-  <span>Aniversários na data</span>
-  <strong id="aniversariosDia">0</strong>
-</div>
-
-<div class="card">
-  <span>Cobrança 4 dias</span>
-  <strong id="cobranca4Dia">0</strong>
-</div>
-
-<div class="card">
-  <span>Cobrança 15 dias</span>
-  <strong id="cobranca15Dia">0</strong>
-</div>
-
-<div class="card">
-  <span>Lembrete 2 dias</span>
-  <strong id="lembrete2Dia">0</strong>
-</div>
-
-<div class="card">
-  <span>Lembrete 5 dias</span>
-  <strong id="lembrete5Dia">0</strong>
-</div>
+        <div class="card"><span>Aniversários na data</span><strong id="aniversariosDia">0</strong></div>
+        <div class="card"><span>Lembrete 5 dias</span><strong id="lembrete5Dia">0</strong></div>
+        <div class="card"><span>Lembrete 2 dias</span><strong id="lembrete2Dia">0</strong></div>
+        <div class="card"><span>Cobrança 3 dias</span><strong id="cobranca3Dia">0</strong></div>
+        <div class="card"><span>Cobrança 4 dias</span><strong id="cobranca4Dia">0</strong></div>
+        <div class="card"><span>Cobrança 15 dias</span><strong id="cobranca15Dia">0</strong></div>
       </section>
+
       <section class="filtros-dashboard">
-  <label for="filtroData">Filtrar por data:</label>
-  <input type="date" id="filtroData" />
-  <button id="btnAplicarData">Aplicar</button>
-</section>
+        <label for="filtroData">Filtrar por data:</label>
+        <input type="date" id="filtroData" />
+        <button id="btnAplicarData">Aplicar</button>
+      </section>
+
       <section class="grid">
         <div class="panel">
           <div class="panel-header"><h2>Notificações por tipo</h2></div>
           <div class="chart-wrap"><canvas id="graficoNotificacoes"></canvas></div>
         </div>
-
         <div class="panel">
           <div class="panel-header"><h2>Resumo rápido</h2></div>
           <div class="quick-list">
@@ -94,11 +76,7 @@
           <table>
             <thead>
               <tr>
-                <th>Data</th>
-                <th>Telefone</th>
-                <th>Entrada</th>
-                <th>Sistema</th>
-                <th>Status</th>
+                <th>Data</th><th>Telefone</th><th>Entrada</th><th>Sistema</th><th>Status</th>
               </tr>
             </thead>
             <tbody id="consultasTabela"></tbody>
@@ -114,13 +92,7 @@
           <table>
             <thead>
               <tr>
-                <th>Sistema</th>
-                <th>Data</th>
-                <th>Nome</th>
-                <th>Telefone</th>
-                <th>Tipo</th>
-                <th>Placa</th>
-                <th>Vencimento</th>
+                <th>Sistema</th><th>Data</th><th>Nome</th><th>Telefone</th><th>Tipo</th><th>Placa</th><th>Vencimento</th>
               </tr>
             </thead>
             <tbody id="notificacoesTabela"></tbody>
@@ -130,42 +102,36 @@
     </div>
 
     <div class="tab-content" id="tab-chat">
-  <section class="panel">
-    <div class="panel-header">
-      <h2>Mini chat - conversas</h2>
-    </div>
-
-    <div class="mini-chat">
-      <aside class="chat-list" id="chatLista"></aside>
-
-      <div class="chat-window">
-        <div class="chat-header" id="chatHeader">
-          Selecione um associado
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Mini chat — conversas</h2>
+          <div class="chat-legenda">
+            <span class="legenda-item legenda-cliente">Cliente</span>
+            <span class="legenda-item legenda-bot">Bot</span>
+            <span class="legenda-item legenda-atendente">Atendente</span>
+          </div>
         </div>
-
-        <div class="chat-messages" id="chatMensagens"></div>
-      </div>
+        <div class="mini-chat">
+          <aside class="chat-list" id="chatLista"></aside>
+          <div class="chat-window">
+            <div class="chat-header" id="chatHeader">Selecione um associado</div>
+            <div class="chat-messages" id="chatMensagens"></div>
+          </div>
+        </div>
+      </section>
     </div>
-  </section>
-</div>
 
     <div class="tab-content" id="tab-avaliacoes">
       <section class="panel">
         <div class="panel-header"><h2>Avaliações de atendimento</h2></div>
         <div class="chart-wrap"><canvas id="graficoAvaliacoes"></canvas></div>
       </section>
-
       <section class="panel">
         <div class="panel-header"><h2>Últimas avaliações</h2></div>
         <div class="table-wrap">
           <table>
             <thead>
-              <tr>
-                <th>Data</th>
-                <th>Telefone</th>
-                <th>Nota</th>
-                <th>Origem</th>
-              </tr>
+              <tr><th>Data</th><th>Telefone</th><th>Nota</th><th>Origem</th></tr>
             </thead>
             <tbody id="avaliacoesTabela"></tbody>
           </table>
