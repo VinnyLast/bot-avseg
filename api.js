@@ -1316,7 +1316,8 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
 // ROTA /notificacoes-pendentes  (South + I9)
 // =============================================================================
 app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
-  const hoje = dayjs();
+  // Ajusta para horário de Brasília (UTC-3)
+  const hoje = dayjs().subtract(3, "hour");
 
   const d5 = hoje.add(5, "day").format("YYYY-MM-DD");
   const d2 = hoje.add(2, "day").format("YYYY-MM-DD");
