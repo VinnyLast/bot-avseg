@@ -1376,6 +1376,9 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
 // ROTA /notificacoes-pendentes  (South + I9)
 // =============================================================================
 app.get("/notificacoes-pendentes", protegerRotaInterna, async (req, res) => {
+  // Limpa links de boletos expirados (mais de 30 dias)
+  limparLinksExpirados();
+
   // Ajusta para horário de Brasília (UTC-3)
   const hoje = dayjs().subtract(3, "hour");
 
@@ -1631,6 +1634,30 @@ function gerarLinkCurto(urlReal) {
   };
   salvarJson(ARQUIVO_BOLETOS_REDIRECT, redirects);
   return `https://bot-avseg.cloud/b/${id}`;
+}
+
+function limparLinksExpirados() {
+  try {
+    const redirects = carregarJson(ARQUIVO_BOLETOS_REDIRECT, {});
+    const limite = new Date();
+    limite.setDate(limite.getDate() - 30);
+
+    let removidos = 0;
+    for (const id of Object.keys(redirects)) {
+      const criadoEm = new Date(redirects[id].criadoEm);
+      if (criadoEm < limite) {
+        delete redirects[id];
+        removidos++;
+      }
+    }
+
+    if (removidos > 0) {
+      salvarJson(ARQUIVO_BOLETOS_REDIRECT, redirects);
+      console.log(`🧹 Links expirados removidos: ${removidos}`);
+    }
+  } catch (erro) {
+    console.error("❌ Erro ao limpar links expirados:", erro.message);
+  }
 }
 
 // Rota pública — redireciona para URL real do boleto
