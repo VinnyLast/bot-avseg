@@ -287,6 +287,34 @@ function formatarValorBR(valor) {
   });
 }
 
+// =============================================================================
+// FILTRO — apenas vencimentos nos dias 10, 20 e 30
+// =============================================================================
+const DIAS_VENCIMENTO_PERMITIDOS = [10, 20, 30];
+
+function diaDoVencimento(vencimento) {
+  if (!vencimento || vencimento === "ND") return null;
+  const texto = String(vencimento).trim();
+
+  // DD/MM/YYYY
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(texto)) {
+    return parseInt(texto.slice(0, 2), 10);
+  }
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    return parseInt(texto.slice(8, 10), 10);
+  }
+  return null;
+}
+
+function filtrarDiasPermitidos(lista) {
+  return lista.filter((item) => {
+    const dia = diaDoVencimento(item.vencimento);
+    if (!dia) return false;
+    return DIAS_VENCIMENTO_PERMITIDOS.includes(dia);
+  });
+}
+
 // ── Health checks ─────────────────────────────────────────────────────────────
 app.get("/", (req, res) => res.send("API do bot funcionando 🚀"));
 
@@ -714,7 +742,7 @@ async function i9BuscarVencimentosRelboletos(dataAlvo, tipoNotificacao) {
 
     console.log(`✅ I9 relboletos [${tipoNotificacao}]: ${titulos.length} título(s) retornado(s)`);
 
-    return titulos
+    const resultadosI9 = titulos
       .filter((t) => t.fone && String(t.fone).replace(/\D/g, "").length >= 10)
       .map((t) => ({
         nome: t.associado || "Associado",
@@ -731,6 +759,8 @@ async function i9BuscarVencimentosRelboletos(dataAlvo, tipoNotificacao) {
         tipo: tipoNotificacao,
         sistema: "i9",
       }));
+
+    return filtrarDiasPermitidos(resultadosI9);
   } catch (erro) {
     console.warn(
       `⚠️ I9 relboletos [${tipoNotificacao}] — ${dataAlvo}:`,
@@ -1018,7 +1048,7 @@ async function southBuscarVencimentos(dataAlvo, tipoNotificacao) {
     }
 
     if (todos.length > 0) {
-      return todos.map((boleto) => ({
+      const mapeados = todos.map((boleto) => ({
         nome: boleto.IndividuosNome || boleto.Nome || "Associado",
         telefone: normalizarTelefoneBR(
           boleto.IndividuosContatosDdd &&
@@ -1049,6 +1079,8 @@ async function southBuscarVencimentos(dataAlvo, tipoNotificacao) {
         tipo: tipoNotificacao,
         sistema: "south",
       }));
+
+      return filtrarDiasPermitidos(mapeados);
     }
   }
 
