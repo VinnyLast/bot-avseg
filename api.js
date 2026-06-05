@@ -1462,9 +1462,16 @@ app.post("/teste-template", protegerRotaInterna, async (req, res) => {
     }
 
     const numero = normalizarTelefoneBR(telefone);
-    const resultado = await enviarTemplate(numero, template, parametros, urlBotao);
 
-    return res.json({ ok: true, telefone: numero, template, resultado });
+    // Se urlBotao for uma URL real (não link curto), gera o link curto automaticamente
+    let linkFinal = urlBotao;
+    if (urlBotao && !urlBotao.includes("bot-avseg.cloud/b/")) {
+      linkFinal = gerarLinkCurto(urlBotao);
+    }
+
+    const resultado = await enviarTemplate(numero, template, parametros, linkFinal);
+
+    return res.json({ ok: true, telefone: numero, template, linkGerado: linkFinal, resultado });
   } catch (erro) {
     return res.status(500).json({ ok: false, erro: erro.response?.data || erro.message });
   }
