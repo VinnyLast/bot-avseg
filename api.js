@@ -1454,14 +1454,14 @@ app.get("/teste-relboletos", protegerRotaInterna, async (req, res) => {
 
 app.post("/teste-template", protegerRotaInterna, async (req, res) => {
   try {
-    const { telefone, template, parametros = [] } = req.body;
+    const { telefone, template, parametros = [], urlBotao = null } = req.body;
 
     if (!telefone || !template) {
       return res.status(400).json({ ok: false, erro: "Informe telefone e template" });
     }
 
     const numero = normalizarTelefoneBR(telefone);
-    const resultado = await enviarTemplate(numero, template, parametros);
+    const resultado = await enviarTemplate(numero, template, parametros, urlBotao);
 
     return res.json({ ok: true, telefone: numero, template, resultado });
   } catch (erro) {
