@@ -932,7 +932,8 @@ async function southBuscarAssociado(placaOuDocumento) {
 }
 
 async function southBuscarAniversariantes() {
-  const hoje = dayjs();
+  // Ajusta para horário de Brasília (UTC-3)
+  const hoje = dayjs().subtract(3, "hour");
   const mes = hoje.month() + 1;
   const dia = hoje.date();
 
