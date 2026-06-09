@@ -24,10 +24,11 @@ function criarBadgeTipo(tipo) {
 }
 
 function hojeISO() {
-  const agora = new Date();
-  const ano = agora.getFullYear();
-  const mes = String(agora.getMonth() + 1).padStart(2, "0");
-  const dia = String(agora.getDate()).padStart(2, "0");
+  // Ajusta para horário de Brasília (UTC-3) — igual ao servidor
+  const agora = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const ano = agora.getUTCFullYear();
+  const mes = String(agora.getUTCMonth() + 1).padStart(2, "0");
+  const dia = String(agora.getUTCDate()).padStart(2, "0");
   return `${ano}-${mes}-${dia}`;
 }
 

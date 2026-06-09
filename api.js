@@ -51,11 +51,17 @@ function registrarLogAvaliacao(item) {
     console.error("❌ Erro ao registrar avaliação:", erro.message);
   }
 }
+function dataHoraBrasilia() {
+  // Retorna ISO string ajustada para UTC-3 (Brasília)
+  const agora = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  return agora.toISOString().replace("Z", "-03:00");
+}
+
 function adicionarLog(caminho, item) {
   const logs = carregarJson(caminho, []);
   logs.unshift({
     ...item,
-    data: new Date().toISOString(),
+    data: dataHoraBrasilia(),
   });
   salvarJson(caminho, logs.slice(0, 5000));
 }
@@ -1602,7 +1608,7 @@ app.get("/dashboard/consultas", protegerRotaInterna, (req, res) => {
 });
 
 app.get("/dashboard/notificacoes", protegerRotaInterna, (req, res) => {
-  res.json(carregarJson(ARQUIVO_LOG_NOTIFICACOES, []).slice(0, 500));
+  res.json(carregarJson(ARQUIVO_LOG_NOTIFICACOES, []).slice(0, 5000));
 });
 
 app.get("/dashboard/optout", protegerRotaInterna, (req, res) => {
