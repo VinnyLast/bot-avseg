@@ -1194,12 +1194,196 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
     return;
   }
 
-  // Fallback — não entendeu a mensagem
+  // =============================================================================
+  // IA — Fallback inteligente
+  // =============================================================================
+  await processarComIA(from, bodyText, msgType, message, contexto);
+}
+
+// =============================================================================
+// IA — FUNÇÃO PRINCIPAL
+// =============================================================================
+async function processarComIA(from, bodyText, msgType, message, contexto = {}) {
+  try {
+    const ehImagem = msgType === "image" || msgType === "document";
+    const ehAudio = msgType === "audio";
+
+    // Monta conteúdo para a IA
+    let mensagemCliente = String(bodyText || "").trim();
+    if (ehImagem) mensagemCliente = `[Cliente enviou ${msgType === "image" ? "uma imagem/comprovante" : "um documento"}]${mensagemCliente ? `: ${mensagemCliente}` : ""}`;
+    if (ehAudio) mensagemCliente = "[Cliente enviou um áudio]";
+    if (!mensagemCliente) mensagemCliente = `[Mensagem do tipo ${msgType}]`;
+
+    const systemPrompt = `Você é um assistente virtual da AVSEG Proteção Veicular, empresa de proteção de veículos em Feira de Santana, Bahia.
+
+Você recebe mensagens de associados que responderam a notificações automáticas (lembretes de vencimento, cobranças) ou entraram em contato pelo WhatsApp.
+
+Seu papel é classificar a intenção do cliente e responder de forma natural, cordial e profissional em português brasileiro.
+
+## REGRAS DE CLASSIFICAÇÃO
+
+Responda SEMPRE em JSON com este formato exato:
+{
+  "intencao": "TIPO",
+  "resposta": "Texto da resposta para o cliente",
+  "acao": "ACAO"
+}
+
+### Tipos de intenção e ações:
+
+**PAGAMENTO_CONFIRMADO** → Cliente diz que já pagou, enviou comprovante, efetuou pagamento
+- acao: "NENHUMA"
+- resposta: Agradeça, informe que o pagamento pode levar até 2 dias úteis para processar e que a proteção continua ativa.
+
+**QUER_BOLETO** → Cliente pede 2ª via, boleto, link de pagamento, como pagar
+- acao: "PEDIR_DADOS"
+- resposta: Peça a placa ou CPF para buscar o boleto.
+
+**COTACAO** → Cliente quer fazer cotação, saber o preço, tem interesse em contratar
+- acao: "NENHUMA"  
+- resposta: Oriente a acessar a opção *1* no menu ou digitar *menu*.
+
+**VISTORIA** → Cliente pergunta sobre vistoria, como fazer, prazo
+- acao: "NENHUMA"
+- resposta: Oriente a acessar a opção *4* no menu ou digitar *menu*.
+
+**VEICULO_INCORRETO** → Cliente diz que a placa não é dele, vendeu o veículo, veículo de outra pessoa
+- acao: "HUMANO"
+- resposta: Demonstre empatia e informe que vai conectar com um atendente para resolver.
+
+**RECLAMACAO** → Cliente reclama, está frustrado, insatisfeito, questiona cobrança indevida
+- acao: "HUMANO"
+- resposta: Demonstre empatia, peça desculpas e informe que vai conectar com um atendente.
+
+**CANCELAMENTO** → Cliente quer cancelar, encerrar o plano
+- acao: "HUMANO"
+- resposta: Demonstre empatia e informe que vai conectar com um atendente especializado.
+
+**SINISTRO** → Cliente teve acidente, roubo, furto, colisão, incêndio — mas está fora do submenu de assistência
+- acao: "NENHUMA"
+- resposta: Oriente a digitar *menu* e escolher a opção *3* (Assistência 24h).
+
+**DUVIDA_GERAL** → Dúvida sobre a proteção, cobertura, funcionamento
+- acao: "HUMANO"
+- resposta: Informe que vai conectar com um atendente para esclarecer.
+
+**AGRADECIMENTO** → "obrigado", "valeu", elogios simples
+- acao: "NENHUMA"
+- resposta: Resposta breve e cordial.
+
+**OUTRO** → Qualquer coisa que não se encaixe acima
+- acao: "NENHUMA"
+- resposta: Responda de forma amigável e sugira digitar *menu*.
+
+## REGRAS DE RESPOSTA
+- Máximo 3 linhas por resposta
+- Tom cordial, humano, sem robotismo
+- Nunca invente informações sobre valores, datas ou cobertura
+- Nunca prometa algo que não sabe se é verdade
+- Assine como: *AVSEG Proteção Veicular*
+- Responda APENAS o JSON, sem texto antes ou depois`;
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 500,
+        system: systemPrompt,
+        messages: [{ role: "user", content: mensagemCliente }],
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("❌ Erro na API Anthropic:", data);
+      await fallbackSimples(from, contexto);
+      return;
+    }
+
+    let resultado;
+    try {
+      const textoRaw = data?.content?.[0]?.text?.trim() || "{}";
+      const textoLimpo = textoRaw.replace(/```json|```/g, "").trim();
+      resultado = JSON.parse(textoLimpo);
+    } catch (erroParse) {
+      console.error("❌ Erro ao parsear resposta da IA:", erroParse.message);
+      await fallbackSimples(from, contexto);
+      return;
+    }
+
+    const { intencao, resposta, acao } = resultado;
+
+    console.log(`🤖 IA [${from}]: intenção=${intencao} ação=${acao}`);
+
+    // Registra no log
+    registrarLogConversa({
+      telefone: normalizarTelefoneBR(from),
+      nome: "Bot IA",
+      origem: "bot_ia",
+      tipo: "ia_resposta",
+      mensagem: resposta || "",
+      mensagemOriginal: bodyText || `[${msgType}]`,
+      intencao: intencao || "OUTRO",
+    });
+
+    // Executa ação
+    if (acao === "PEDIR_DADOS") {
+      // Coloca no estado de pagamento para processar placa/CPF na próxima mensagem
+      estadoUsuario[from] = "pagamento";
+    }
+
+    if (acao === "HUMANO") {
+      // Avisa o cliente e abre no Chatwoot
+      if (resposta) await enviarTextoCanal(from, resposta, contexto);
+
+      modoHumano.add(from);
+      estadoUsuario[from] = null;
+
+      // Abre conversa no Chatwoot
+      if (temChatwootConfigurado()) {
+        try {
+          let convId = contexto.conversationId || obterUltimoCanal(from)?.conversationId;
+          if (!convId) {
+            convId = await criarConversaChatwoot(from, "Cliente");
+          } else {
+            await abrirConversaHumanaChatwoot(convId);
+          }
+          if (convId) {
+            atualizarUltimoCanal(from, { conversationId: convId });
+            await enviarTextoChatwoot(
+              convId,
+              `🤖 *IA escalou para humano*\n\nIntenção identificada: *${intencao}*\nMensagem do cliente: "${bodyText || `[${msgType}]`}"\n\n📱 Número: +${from}`,
+              true,
+            );
+          }
+        } catch (erroChat) {
+          console.error("❌ Erro ao abrir Chatwoot via IA:", erroChat.message);
+        }
+      }
+      return;
+    }
+
+    // Para outras ações, envia a resposta da IA
+    if (resposta) {
+      await enviarTextoCanal(from, resposta, contexto);
+    }
+
+  } catch (erro) {
+    console.error("❌ Erro ao processar com IA:", erro.message);
+    await fallbackSimples(from, contexto);
+  }
+}
+
+async function fallbackSimples(from, contexto = {}) {
   await enviarTextoCanal(
     from,
-    `Não entendi sua mensagem. 😅
-
-Digite *menu* para ver todas as opções disponíveis.`,
+    `Olá! Recebi sua mensagem. 😊\n\nPara acessar todas as opções, digite *menu*.\n\n🦁 *AVSEG Proteção Veicular*`,
     contexto,
   );
 }
