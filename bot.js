@@ -90,6 +90,20 @@ const usuariosOptOut = carregarOptOut();
 const avaliacoes = [];
 const ultimoCanalPorNumero = Object.create(null);
 
+// Cache para evitar processar a mesma mensagem duas vezes
+const mensagensProcessadas = new Set();
+function jaProcessou(messageId) {
+  if (!messageId) return false;
+  if (mensagensProcessadas.has(messageId)) return true;
+  mensagensProcessadas.add(messageId);
+  // Limpa o cache quando passar de 1000 entradas
+  if (mensagensProcessadas.size > 1000) {
+    const primeiro = mensagensProcessadas.values().next().value;
+    mensagensProcessadas.delete(primeiro);
+  }
+  return false;
+}
+
 // =============================================================================
 // UTILITÁRIOS
 // =============================================================================

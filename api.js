@@ -181,6 +181,9 @@ const app = express();
 app.use(express.static("public"));
 app.use(express.json({ limit: "1mb" }));
 
+// Cache global para evitar processar mensagens duplicadas do webhook Meta
+const mensagensJaProcessadas = new Set();
+
 const PORT = Number(process.env.PORT || 10000);
 
 // ── Credenciais internas ──────────────────────────────────────────────────────
@@ -422,6 +425,20 @@ app.post("/webhook", async (req, res) => {
   if (!from) {
     console.warn("⚠️ Número inválido recebido no webhook");
     return;
+  }
+
+  // Evita processar a mesma mensagem duas vezes (Meta pode disparar duplicatas)
+  const messageId = message.id;
+  if (messageId && mensagensJaProcessadas.has(messageId)) {
+    console.log(`⏭️ Mensagem duplicada ignorada: ${messageId}`);
+    return;
+  }
+  if (messageId) {
+    mensagensJaProcessadas.add(messageId);
+    if (mensagensJaProcessadas.size > 1000) {
+      const primeiro = mensagensJaProcessadas.values().next().value;
+      mensagensJaProcessadas.delete(primeiro);
+    }
   }
 
   console.log(`📩 Mensagem de ${from} [${msgType}]`);
