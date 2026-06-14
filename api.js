@@ -482,12 +482,14 @@ app.post("/chatwoot-bot", async (req, res) => {
       });
     }
 
-    // Ignora outgoing sem source_id — são mensagens enviadas pelo próprio bot
-    // Mensagens de atendentes humanos têm source_id ou senderType "agent"
+    // Distingue mensagens do bot de mensagens do atendente:
+    // - Bot: envia via API → Chatwoot dispara evento de conversa, sem content no root
+    // - Atendente: Chatwoot dispara event=message_created com content no root
     if (messageTypeNome === "outgoing") {
-      // source_id null = mensagem enviada pelo bot via API do Chatwoot
-      // source_id preenchido = mensagem de atendente humano
-      if (!sourceId) {
+      const temContentNoRoot = Boolean(body.content && String(body.content).trim());
+      const ehEventoMensagem = body.event === "message_created";
+
+      if (!temContentNoRoot || !ehEventoMensagem) {
         return res.status(200).json({ ok: true, ignored: "outgoing_bot_ignored_to_prevent_duplicate" });
       }
     }
