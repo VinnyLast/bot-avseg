@@ -482,16 +482,24 @@ app.post("/chatwoot-bot", async (req, res) => {
       });
     }
 
-    // Distingue mensagens do bot de mensagens do atendente:
-    // - Bot: envia via API → Chatwoot dispara evento de conversa, sem content no root
-    // - Atendente: Chatwoot dispara event=message_created com content no root
+    // Distingue mensagens do bot/espelho de mensagens do atendente real:
+    // - Bot outgoing (via API): source_id null na mensagem
+    // - Bot incoming espelhado: source_id começa com "wa_" mas sem account no root
+    // - Atendente real: event=message_created, content no root, tem body.account
     if (messageTypeNome === "outgoing") {
       const temContentNoRoot = Boolean(body.content && String(body.content).trim());
       const ehEventoMensagem = body.event === "message_created";
+      const temAccount = Boolean(body.account?.id);
 
-      if (!temContentNoRoot || !ehEventoMensagem) {
+      // Só envia para WhatsApp se for mensagem real de atendente
+      if (!temContentNoRoot || !ehEventoMensagem || !temAccount) {
         return res.status(200).json({ ok: true, ignored: "outgoing_bot_ignored_to_prevent_duplicate" });
       }
+    }
+
+    // Ignora incoming espelhado pelo bot (source_id gerado pelo nosso código)
+    if (messageTypeNome === "incoming") {
+      return res.status(200).json({ ok: true, ignored: "incoming_mirror_ignored" });
     }
 
     const phoneRaw =
