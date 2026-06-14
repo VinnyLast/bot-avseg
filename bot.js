@@ -1166,6 +1166,7 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
 
   // Pagamento (estado ativo)
   if (estadoUsuario[from] === "pagamento") {
+    console.log(`💳 Estado pagamento ativo para ${from}: "${bodyText}"`);
     await processarPagamento(from, bodyText, contexto);
     return;
   }
@@ -1220,7 +1221,8 @@ Responda SEMPRE em JSON com este formato exato:
 {
   "intencao": "TIPO",
   "resposta": "Texto da resposta para o cliente",
-  "acao": "ACAO"
+  "acao": "ACAO",
+  "dados": "placa ou CPF extraído (apenas para BUSCAR_BOLETO, senão null)"
 }
 
 ### Tipos de intenção e ações:
@@ -1229,9 +1231,14 @@ Responda SEMPRE em JSON com este formato exato:
 - acao: "NENHUMA"
 - resposta: Agradeça, informe que o pagamento pode levar até 2 dias úteis para processar e que a proteção continua ativa.
 
-**QUER_BOLETO** → Cliente pede 2ª via, boleto, link de pagamento, como pagar
+**QUER_BOLETO_SEM_DADOS** → Cliente pede 2ª via, boleto, link de pagamento, como pagar, SEM informar placa ou CPF
 - acao: "PEDIR_DADOS"
 - resposta: Peça a placa ou CPF para buscar o boleto.
+
+**QUER_BOLETO_COM_DADOS** → Cliente pede boleto E já informa a placa ou CPF na mesma mensagem (ex: "minha placa é ABC1234", "preciso pagar, CPF 123")
+- acao: "BUSCAR_BOLETO"
+- resposta: "" (vazio, o sistema vai buscar automaticamente)
+- dados: extraia a placa ou CPF mencionado
 
 **COTACAO** → Cliente quer fazer cotação, saber o preço, tem interesse em contratar
 - acao: "NENHUMA"  
@@ -1330,6 +1337,14 @@ Responda SEMPRE em JSON com este formato exato:
     if (acao === "PEDIR_DADOS") {
       // Coloca no estado de pagamento para processar placa/CPF na próxima mensagem
       estadoUsuario[from] = "pagamento";
+    }
+
+    if (acao === "BUSCAR_BOLETO") {
+      // Cliente já informou a placa/CPF — processa direto sem responder da IA
+      const dadosExtraidos = resultado.dados || bodyText;
+      estadoUsuario[from] = "pagamento";
+      await processarPagamento(from, dadosExtraidos, contexto);
+      return;
     }
 
     if (acao === "HUMANO") {
