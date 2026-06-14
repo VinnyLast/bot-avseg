@@ -691,17 +691,9 @@ async function enviarTextoCanal(from, texto, contexto = {}) {
       mensagem: texto,
     });
 
-    // Espelha no Chatwoot apenas se houver conversa ativa (cliente já interagiu)
-    if (temChatwootConfigurado()) {
-      const conversationId = contexto.conversationId || obterUltimoCanal(numero)?.conversationId;
-      if (conversationId) {
-        try {
-          await enviarTextoChatwoot(conversationId, texto, false);
-        } catch (erroChatwoot) {
-          console.warn(`⚠️ Não foi possível espelhar mensagem no Chatwoot:`, erroChatwoot.message);
-        }
-      }
-    }
+    // Nota: não espelhamos manualmente no Chatwoot aqui pois causa duplicatas.
+    // O Chatwoot recebe as mensagens do cliente via webhook da Meta automaticamente.
+    // As respostas do bot ficam registradas apenas no log local.
   } catch (erro) {
     console.error(`❌ Erro ao enviar texto para ${numero}:`, erro.response?.data || erro.message);
   }
@@ -715,18 +707,6 @@ async function enviarImagemCanal(from, imageUrl, caption = "", contexto = {}) {
   try {
     await enviarImagem(numero, imageUrl, caption);
     console.log(`✅ Imagem enviada para ${numero}`);
-
-    // Espelha no Chatwoot se houver conversa ativa (envia o caption como texto)
-    if (temChatwootConfigurado()) {
-      const conversationId = contexto.conversationId || obterUltimoCanal(numero)?.conversationId;
-      if (conversationId && caption) {
-        try {
-          await enviarTextoChatwoot(conversationId, caption, false);
-        } catch (erroChatwoot) {
-          console.warn(`⚠️ Não foi possível espelhar imagem no Chatwoot:`, erroChatwoot.message);
-        }
-      }
-    }
 
     // Registra no log
     registrarLogConversa({
