@@ -691,9 +691,17 @@ async function enviarTextoCanal(from, texto, contexto = {}) {
       mensagem: texto,
     });
 
-    // Nota: não espelhamos manualmente no Chatwoot aqui pois causa duplicatas.
-    // O Chatwoot recebe as mensagens do cliente via webhook da Meta automaticamente.
-    // As respostas do bot ficam registradas apenas no log local.
+    // Espelha no Chatwoot como nota privada (não gera evento outgoing, evita duplicata)
+    if (temChatwootConfigurado()) {
+      const conversationId = contexto.conversationId || obterUltimoCanal(numero)?.conversationId;
+      if (conversationId) {
+        try {
+          await enviarTextoChatwoot(conversationId, `🤖 Bot: ${texto}`, true);
+        } catch (erroChatwoot) {
+          console.warn(`⚠️ Não foi possível espelhar no Chatwoot:`, erroChatwoot.message);
+        }
+      }
+    }
   } catch (erro) {
     console.error(`❌ Erro ao enviar texto para ${numero}:`, erro.response?.data || erro.message);
   }
