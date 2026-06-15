@@ -529,6 +529,11 @@ async function enviarMensagemClienteChatwoot(conversationId, texto) {
     console.log(`✅ Mensagem do cliente enviada ao Chatwoot conv=${conversationId}:`, response.data?.id || "ok");
     return response.data;
   } catch (erro) {
+    const status = erro?.response?.status || 0;
+    if (status === 404) {
+      // Relança o 404 para que espelharMensagemNoChatwoot possa tratar
+      throw erro;
+    }
     console.error("❌ Erro ao enviar mensagem do associado para Chatwoot:", erro.response?.data || erro.message);
   }
 }
