@@ -366,23 +366,12 @@ function atualizarUltimoCanal(from, dados = {}) {
   const numero = normalizarTelefoneBR(from);
   if (!numero) return;
 
-  // Se conversationId for null, limpa completamente o canal
   if (dados.conversationId === null) {
     ultimoCanalPorNumero[numero] = { origem: "meta", conversationId: null };
-    // Remove do arquivo persistente
-    try {
-      const canais = carregarJson(ARQUIVO_CANAIS, {});
-      delete canais[numero];
-      salvarJson(ARQUIVO_CANAIS, canais);
-    } catch (_) {}
     return;
   }
 
   ultimoCanalPorNumero[numero] = { ...ultimoCanalPorNumero[numero], ...dados };
-  // Persiste em arquivo se tiver conversationId
-  if (ultimoCanalPorNumero[numero]?.conversationId) {
-    salvarCanalPersistente(numero, ultimoCanalPorNumero[numero]);
-  }
 }
 
 function obterUltimoCanal(from) {
@@ -1882,8 +1871,5 @@ app.get("/modo-humano", protegerRotaInterna, (req, res) => {
 app.get("/canais", protegerRotaInterna, (req, res) => {
   res.json({ total: Object.keys(ultimoCanalPorNumero).length, canais: ultimoCanalPorNumero });
 });
-
-// Carrega canais persistentes ao iniciar (restaura conversationId após restart)
-carregarCanaisPersistentes();
 
 console.log(`🤖 Bot iniciado. TEST_MODE=${TEST_MODE ? "ON" : "OFF"} | CHATWOOT=${temChatwootConfigurado() ? "ON" : "OFF"}`);
