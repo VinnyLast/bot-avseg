@@ -1264,11 +1264,52 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
     "certo", "entendi", "ok", "blz", "beleza", "perfeito", "ótimo", "massa",
   ];
 
-  // Ignora mídia — imagem, vídeo, áudio, documento e reaction
-  // O atendente humano verifica e responde no Chatwoot
-  const ehMidia = ["image", "video", "audio", "document", "sticker", "reaction"].includes(msgType);
+  // Mídia — responde confirmando recebimento e escala para humano
+  const ehMidia = ["image", "video", "audio", "document", "sticker"].includes(msgType);
   if (ehMidia) {
-    console.log(`⏭️ Mídia ignorada pelo bot (${msgType}): ${from}`);
+    console.log(`📎 Mídia recebida (${msgType}): ${from}`);
+    const dentroDoHorario = estaEmHorarioAtendimento();
+    const msgMidia = dentroDoHorario
+      ? `Obrigado pelo envio! 🙏 Um atendente irá verificar em breve.
+
+*AVSEG Proteção Veicular*`
+      : `Obrigado pelo envio! 🙏 Nosso horário de atendimento é:
+
+🗓️ *Segunda a sexta:* 08h às 18h
+🗓️ *Sábado:* 08h às 12h
+
+Assim que retornarmos, seu envio será verificado. ✅
+
+*AVSEG Proteção Veicular*`;
+
+    await enviarTextoCanal(from, msgMidia, contexto);
+    // Escala para humano automaticamente
+    modoHumano.add(from);
+    estadoUsuario[from] = null;
+    if (temChatwootConfigurado()) {
+      try {
+        let convId = contexto.conversationId || obterUltimoCanal(from)?.conversationId;
+        if (!convId) {
+          convId = await criarConversaChatwoot(from, nomeCliente || "Associado");
+        } else {
+          await abrirConversaHumanaChatwoot(convId);
+        }
+        if (convId) {
+          atualizarUltimoCanal(from, { conversationId: convId });
+          await enviarTextoChatwoot(convId, `📎 Associado enviou mídia (${msgType}). Aguardando verificação do atendente.
+
+📱 Número: +${from}`, true);
+        }
+      } catch (erroChat) {
+        console.error("❌ Erro ao escalar mídia para Chatwoot:", erroChat.message);
+      }
+    }
+    return;
+  }
+
+  // Reaction — ignora silenciosamente
+  if (msgType === "reaction") {
+    console.log(`⏭️ Reaction ignorado: ${from}`);
     return;
   }
 
