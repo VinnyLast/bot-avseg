@@ -344,3 +344,9 @@ tr:hover td { background: rgba(244,196,0,0.04); }
 @media (max-width: 500px) {
   .cards { grid-template-columns: 1fr; }
 }
+
+.badge-pago {
+  background: rgba(74, 158, 255, 0.12);
+  color: #4a9eff;
+  border: 1px solid rgba(74, 158, 255, 0.3);
+}

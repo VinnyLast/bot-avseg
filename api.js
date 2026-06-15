@@ -938,6 +938,44 @@ async function i9BuscarUrlPorPlaca(placa) {
 }
 
 // =============================================================================
+// I9 — VERIFICAR SE CADASTRO EXISTE (sem boleto em aberto)
+// =============================================================================
+async function i9VerificarCadastro({ placa, cpf, cnpj }) {
+  try {
+    let tipo = 1;
+    if (cpf) tipo = 2;
+    if (cnpj) tipo = 3;
+
+    const payload = {
+      token: TOKEN_I9,
+      tipo,
+      placa: normalizarPlaca(placa || ""),
+      cpf: normalizarDocumento(cpf || ""),
+      cnpj: normalizarDocumento(cnpj || ""),
+    };
+
+    const resposta = await axios.post(I9_BOLETO_URL, payload, {
+      headers: { "Content-Type": "application/json" },
+      timeout: 15000,
+    });
+
+    const veiculos = Array.isArray(resposta.data?.veiculos) ? resposta.data.veiculos : [];
+
+    if (veiculos.length === 0) return "nao_cadastrado";
+
+    // Verifica se todos os veículos têm vencimento ND (já pagou)
+    const todosND = veiculos.every(
+      (v) => (!v.vencimento || v.vencimento === "ND") && (!v.valor || v.valor === "ND")
+    );
+
+    return todosND ? "pago" : "em_aberto";
+  } catch (erro) {
+    console.warn("⚠️ I9 verificar cadastro:", erro.message);
+    return "erro";
+  }
+}
+
+// =============================================================================
 // SOUTH
 // =============================================================================
 function temResultadoSouth(dados) {
@@ -1382,18 +1420,57 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
       return res.json({ sistema: "south", ...dadosSouth });
     }
 
+    // Verifica se cadastro existe mas boleto já foi pago
+    let statusFinal = "nao_encontrado";
+    let mensagemFinal = montarMensagemSemResultado(entradaExibicao);
+
+    // Tenta verificar no I9 se cadastro existe
+    const statusI9 = await i9VerificarCadastro({
+      placa: placaFinal,
+      cpf: cpfFinal,
+      cnpj: cnpjFinal,
+    });
+
+    if (statusI9 === "pago") {
+      statusFinal = "pago";
+      mensagemFinal =
+        `✅ *Pagamento identificado!*
+
+` +
+        `Seu boleto referente a *${entradaExibicao}* consta como pago em nosso sistema.
+
+` +
+        `Caso tenha alguma dúvida, digite *5* para falar com um atendente ou *menu* para ver as opções.`;
+    } else if (statusI9 === "nao_cadastrado") {
+      // Verifica no South se existe cadastro
+      try {
+        const associadoSouth = await southBuscarAssociado(placaFinal || cpfFinal || cnpjFinal);
+        if (associadoSouth?.Dados?.ClientesIndividuosDocumento) {
+          statusFinal = "pago";
+          mensagemFinal =
+            `✅ *Sem pendências encontradas!*
+
+` +
+            `Não há boleto em aberto para *${entradaExibicao}* no momento. Provavelmente o pagamento já foi realizado.
+
+` +
+            `Se tiver dúvidas, digite *5* para falar com um atendente.`;
+        }
+      } catch (_) {}
+    }
+
     adicionarLog(ARQUIVO_LOG_CONSULTAS, {
       telefone: telefoneLog,
       entrada: entradaExibicao,
       sistema: "auto",
-      status: "nao_encontrado",
+      status: statusFinal,
     });
 
     return res.status(404).json({
       status: "erro",
       mensagem: "Nenhum boleto encontrado",
       veiculos: [],
-      mensagemWhatsapp: montarMensagemSemResultado(entradaExibicao),
+      mensagemWhatsapp: mensagemFinal,
     });
   } catch (erro) {
     console.error("Erro /boleto:", extrairErro(erro));

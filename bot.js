@@ -1005,6 +1005,20 @@ async function processarPagamento(from, bodyText, contexto = {}) {
 
     const comBoleto = dados.veiculos.filter(existeBoletoDisponivel);
 
+    // Se retornar muitos veículos (CPF/CNPJ com muitos veículos), pede a placa
+    if (comBoleto.length > 5) {
+      await enviarTextoCanal(
+        from,
+        `🚗 Encontramos *${comBoleto.length} veículos* associados a esse cadastro.
+
+` +
+        `Para localizar o boleto correto, por favor informe a *placa do veículo* específico que deseja consultar.`,
+        contexto,
+      );
+      estadoUsuario[from] = "pagamento";
+      return;
+    }
+
     if (comBoleto.length === 0) {
       // Verifica se pode ser caso de atraso > 3 dias (precisa de vistoria)
       const temVeiculoComVencimento = Array.isArray(dados.veiculos) && dados.veiculos.some(

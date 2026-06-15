@@ -14,9 +14,9 @@ function formatarData(data) {
 }
 
 function criarBadgeStatus(status) {
-  const texto = status === "encontrado" ? "Encontrado" : "Não encontrado";
-  const classe = status === "encontrado" ? "badge badge-ok" : "badge badge-erro";
-  return `<span class="${classe}">${texto}</span>`;
+  if (status === "encontrado") return `<span class="badge badge-ok">Encontrado</span>`;
+  if (status === "pago") return `<span class="badge badge-pago">Pago ✅</span>`;
+  return `<span class="badge badge-erro">Não encontrado</span>`;
 }
 
 function criarBadgeTipo(tipo) {
