@@ -798,6 +798,23 @@ async function enviarImagemCanal(from, imageUrl, caption = "", contexto = {}) {
       tipo: "image",
       mensagem: caption ? caption.slice(0, 100) + (caption.length > 100 ? "..." : "") : "[imagem]",
     });
+
+    // Espelha no Chatwoot como nota privada
+    if (temChatwootConfigurado() && caption) {
+      const conversationId = contexto.conversationId || obterUltimoCanal(numero)?.conversationId;
+      if (conversationId) {
+        try {
+          await enviarTextoChatwoot(conversationId, `🤖 Bot: ${caption.slice(0, 200)}${caption.length > 200 ? "..." : ""}`, true);
+        } catch (erroChatwoot) {
+          const status = erroChatwoot?.response?.status || 0;
+          if (status === 404) {
+            atualizarUltimoCanal(numero, { conversationId: null });
+          } else {
+            console.warn(`⚠️ Não foi possível espelhar imagem no Chatwoot:`, erroChatwoot.message);
+          }
+        }
+      }
+    }
   } catch (erro) {
     console.error("Erro enviando imagem:", erro.response?.data || erro.message);
     if (caption) await enviarTextoCanal(numero, caption, contexto);
@@ -854,6 +871,16 @@ async function enviarMenu(numero, cliente, contexto = {}) {
     "_(Para parar notificações, responda 0)_",
     sections,
   );
+
+  // Espelha menu no Chatwoot como nota privada
+  if (resultado && temChatwootConfigurado()) {
+    const convId = contexto.conversationId || obterUltimoCanal(numero)?.conversationId;
+    if (convId) {
+      try {
+        await enviarTextoChatwoot(convId, `🤖 Bot: Menu principal enviado ao associado`, true);
+      } catch (_) {}
+    }
+  }
 
   // Fallback para texto se lista falhar
   if (!resultado) {
