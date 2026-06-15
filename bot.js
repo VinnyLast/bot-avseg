@@ -609,16 +609,7 @@ async function enviarAnexoClienteChatwoot(conversationId, message) {
 async function espelharMensagemNoChatwoot({ from, bodyText, msgType = "text", message = null, nomeCliente = "Cliente" }) {
   if (!temChatwootConfigurado()) return null;
 
-  try {
-    let convId = obterUltimoCanal(from)?.conversationId;
-
-    if (!convId) {
-      convId = await criarConversaChatwoot(from, nomeCliente || "Cliente");
-      if (convId) atualizarUltimoCanal(from, { origem: "meta", conversationId: convId });
-    }
-
-    if (!convId) return null;
-
+  async function enviarParaConversa(convId) {
     const textoParaChatwoot =
       bodyText && String(bodyText).trim()
         ? bodyText
@@ -634,8 +625,40 @@ async function espelharMensagemNoChatwoot({ from, bodyText, msgType = "text", me
         await enviarMensagemClienteChatwoot(convId, bodyText);
       }
     }
+  }
 
-    return convId;
+  try {
+    let convId = obterUltimoCanal(from)?.conversationId;
+
+    if (!convId) {
+      convId = await criarConversaChatwoot(from, nomeCliente || "Associado");
+      if (convId) atualizarUltimoCanal(from, { origem: "meta", conversationId: convId });
+    }
+
+    if (!convId) return null;
+
+    try {
+      await enviarParaConversa(convId);
+      return convId;
+    } catch (erro404) {
+      // Conversa foi deletada no Chatwoot — cria uma nova
+      const status = erro404?.response?.status || 0;
+      const msg = erro404?.response?.data?.error || erro404.message || "";
+      if (status === 404 || msg.includes("not found") || msg.includes("could not be found")) {
+        console.log(`⚠️ Conversa ${convId} não existe mais no Chatwoot. Criando nova...`);
+        atualizarUltimoCanal(from, { conversationId: null });
+        const novoConvId = await criarConversaChatwoot(from, nomeCliente || "Associado");
+        if (novoConvId) {
+          atualizarUltimoCanal(from, { origem: "meta", conversationId: novoConvId });
+          await enviarParaConversa(novoConvId);
+          return novoConvId;
+        }
+      } else {
+        throw erro404;
+      }
+    }
+
+    return null;
   } catch (erro) {
     console.error("❌ Erro ao espelhar mensagem no Chatwoot:", erro.response?.data || erro.message);
     return null;
@@ -739,7 +762,15 @@ async function enviarTextoCanal(from, texto, contexto = {}) {
         try {
           await enviarTextoChatwoot(conversationId, `🤖 Bot: ${texto}`, true);
         } catch (erroChatwoot) {
-          console.warn(`⚠️ Não foi possível espelhar no Chatwoot:`, erroChatwoot.message);
+          const status = erroChatwoot?.response?.status || 0;
+          const msgErr = erroChatwoot?.response?.data?.error || erroChatwoot.message || "";
+          if (status === 404 || msgErr.includes("not found") || msgErr.includes("could not be found")) {
+            // Conversa deletada — limpa o cache para criar nova na próxima mensagem
+            console.log(`⚠️ Conversa ${conversationId} deletada no Chatwoot. Limpando cache...`);
+            atualizarUltimoCanal(numero, { conversationId: null });
+          } else {
+            console.warn(`⚠️ Não foi possível espelhar no Chatwoot:`, erroChatwoot.message);
+          }
         }
       } else {
         console.log(`⚠️ Sem conversationId para espelhar no Chatwoot: ${numero}`);
