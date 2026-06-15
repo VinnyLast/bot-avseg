@@ -1201,7 +1201,18 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
 
   if (origem === "meta" && temChatwootConfigurado()) {
     conversationIdChatwoot = await espelharMensagemNoChatwoot({ from, bodyText, msgType, message, nomeCliente });
-    if (conversationIdChatwoot) contexto.conversationId = conversationIdChatwoot;
+    if (conversationIdChatwoot) {
+      contexto.conversationId = conversationIdChatwoot;
+    } else {
+      // Se não retornou convId (ex: após 404), busca o novo que pode ter sido criado
+      const canalAtual = obterUltimoCanal(from);
+      if (canalAtual?.conversationId) {
+        conversationIdChatwoot = canalAtual.conversationId;
+        contexto.conversationId = canalAtual.conversationId;
+      } else {
+        contexto.conversationId = null;
+      }
+    }
   }
 
   // 0. Modo humano
