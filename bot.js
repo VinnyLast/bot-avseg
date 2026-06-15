@@ -741,6 +741,8 @@ async function enviarTextoCanal(from, texto, contexto = {}) {
         } catch (erroChatwoot) {
           console.warn(`⚠️ Não foi possível espelhar no Chatwoot:`, erroChatwoot.message);
         }
+      } else {
+        console.log(`⚠️ Sem conversationId para espelhar no Chatwoot: ${numero}`);
       }
     }
   } catch (erro) {
