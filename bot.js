@@ -1157,7 +1157,7 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
   }
 
   // 3. Menu
-  if (["oi", "olá", "ola", "menu", "inicio", "início"].includes(texto)) {
+  if (["oi", "olá", "ola", "opa", "oii", "oiii", "bom dia", "boa tarde", "boa noite", "menu", "inicio", "início", "ola", "hello", "hi"].includes(texto)) {
     estadoUsuario[from] = null;
     let cliente = null;
     try {
