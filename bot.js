@@ -55,6 +55,7 @@ const DELAY_TEMPLATE_MAX_MS = Number(
 const ARQUIVO_ENVIOS = path.join(__dirname, "envios_templates.json");
 const ARQUIVO_OPTOUT = path.join(__dirname, "usuarios_optout.json");
 const ARQUIVO_LOG_AVALIACOES = path.join(__dirname, "logs_avaliacoes.json");
+const ARQUIVO_CANAIS = path.join(__dirname, "canais_persistentes.json");
 const ALLOWED_NUMBERS = new Set(
   String(process.env.ALLOWED_NUMBERS || "")
     .split(",")
@@ -102,6 +103,42 @@ function jaProcessou(messageId) {
     mensagensProcessadas.delete(primeiro);
   }
   return false;
+}
+
+// =============================================================================
+// PERSISTÊNCIA DE CANAIS (conversationId por número)
+// =============================================================================
+const VALIDADE_CANAL_DIAS = 7;
+
+function carregarCanaisPersistentes() {
+  try {
+    const dados = carregarJson(ARQUIVO_CANAIS, {});
+    const agora = Date.now();
+    const validos = {};
+    for (const [numero, info] of Object.entries(dados)) {
+      const diasPassados = (agora - new Date(info.atualizadoEm).getTime()) / (1000 * 60 * 60 * 24);
+      if (diasPassados <= VALIDADE_CANAL_DIAS) {
+        validos[numero] = info;
+        // Restaura em memória
+        ultimoCanalPorNumero[numero] = info;
+      }
+    }
+    console.log(`📂 Canais persistentes carregados: ${Object.keys(validos).length}`);
+    return validos;
+  } catch (erro) {
+    console.error("❌ Erro ao carregar canais persistentes:", erro.message);
+    return {};
+  }
+}
+
+function salvarCanalPersistente(numero, dados) {
+  try {
+    const canais = carregarJson(ARQUIVO_CANAIS, {});
+    canais[numero] = { ...dados, atualizadoEm: new Date().toISOString() };
+    salvarJson(ARQUIVO_CANAIS, canais);
+  } catch (erro) {
+    console.error("❌ Erro ao salvar canal persistente:", erro.message);
+  }
 }
 
 // =============================================================================
@@ -329,6 +366,10 @@ function atualizarUltimoCanal(from, dados = {}) {
   const numero = normalizarTelefoneBR(from);
   if (!numero) return;
   ultimoCanalPorNumero[numero] = { ...ultimoCanalPorNumero[numero], ...dados };
+  // Persiste em arquivo se tiver conversationId
+  if (ultimoCanalPorNumero[numero]?.conversationId) {
+    salvarCanalPersistente(numero, ultimoCanalPorNumero[numero]);
+  }
 }
 
 function obterUltimoCanal(from) {
@@ -1738,5 +1779,8 @@ app.get("/modo-humano", protegerRotaInterna, (req, res) => {
 app.get("/canais", protegerRotaInterna, (req, res) => {
   res.json({ total: Object.keys(ultimoCanalPorNumero).length, canais: ultimoCanalPorNumero });
 });
+
+// Carrega canais persistentes ao iniciar (restaura conversationId após restart)
+carregarCanaisPersistentes();
 
 console.log(`🤖 Bot iniciado. TEST_MODE=${TEST_MODE ? "ON" : "OFF"} | CHATWOOT=${temChatwootConfigurado() ? "ON" : "OFF"}`);
