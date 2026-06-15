@@ -1270,10 +1270,10 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
     console.log(`📎 Mídia recebida (${msgType}): ${from}`);
     const dentroDoHorario = estaEmHorarioAtendimento();
     const msgMidia = dentroDoHorario
-      ? `Obrigado pelo envio! 🙏 Um atendente irá verificar em breve.
+      ? `Obrigado pelo envio! 🤝 Um atendente irá verificar em breve.
 
 *AVSEG Proteção Veicular*`
-      : `Obrigado pelo envio! 🙏 Nosso horário de atendimento é:
+      : `Obrigado pelo envio! 🤝 Nosso horário de atendimento é:
 
 🗓️ *Segunda a sexta:* 08h às 18h
 🗓️ *Sábado:* 08h às 12h
