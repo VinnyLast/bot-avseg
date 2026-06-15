@@ -1402,7 +1402,23 @@ Assim que retornarmos, seu envio será verificado. ✅
 📱 Número: +${from}`, true);
         }
       } catch (erroChat) {
-        console.error("❌ Erro ao escalar mídia para Chatwoot:", erroChat.message);
+        const status404 = erroChat?.response?.status === 404;
+        if (status404) {
+          console.log(`⚠️ Conversa deletada ao escalar mídia. Limpando cache: ${from}`);
+          atualizarUltimoCanal(from, { conversationId: null });
+          // Tenta criar nova conversa e reenviar
+          try {
+            const novoConvId = await criarConversaChatwoot(from, nomeCliente || "Associado");
+            if (novoConvId) {
+              atualizarUltimoCanal(from, { origem: "meta", conversationId: novoConvId });
+              await enviarTextoChatwoot(novoConvId, `📎 Associado enviou mídia (${msgType}). Aguardando verificação do atendente.
+
+📱 Número: +${from}`, true);
+            }
+          } catch (_) {}
+        } else {
+          console.error("❌ Erro ao escalar mídia para Chatwoot:", erroChat.message);
+        }
       }
     }
     return;
