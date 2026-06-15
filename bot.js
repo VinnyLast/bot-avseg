@@ -1555,7 +1555,10 @@ Responda SEMPRE em JSON com este formato exato:
         model: "claude-haiku-4-5-20251001",
         max_tokens: 500,
         system: systemPrompt,
-        messages: [{ role: "user", content: mensagemCliente }],
+        messages: [
+          { role: "user", content: mensagemCliente },
+          { role: "assistant", content: "{" },
+        ],
       }),
     });
 
@@ -1569,8 +1572,10 @@ Responda SEMPRE em JSON com este formato exato:
 
     let resultado;
     try {
-      const textoRaw = data?.content?.[0]?.text?.trim() || "{}";
-      const textoLimpo = textoRaw.replace(/```json|```/g, "").trim();
+      const textoRaw = data?.content?.[0]?.text?.trim() || "}";
+      // Adiciona o { que foi usado como prefill
+      const textoCompleto = "{" + textoRaw;
+      const textoLimpo = textoCompleto.replace(/```json|```/g, "").trim();
       resultado = JSON.parse(textoLimpo);
     } catch (erroParse) {
       console.error("❌ Erro ao parsear resposta da IA:", erroParse.message);
