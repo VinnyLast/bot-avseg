@@ -640,40 +640,38 @@ async function espelharMensagemNoChatwoot({ from, bodyText, msgType = "text", me
     }
   }
 
-  try {
-    let convId = obterUltimoCanal(from)?.conversationId;
+  let convId = obterUltimoCanal(from)?.conversationId;
 
-    if (!convId) {
-      convId = await criarConversaChatwoot(from, nomeCliente || "Associado");
-      if (convId) atualizarUltimoCanal(from, { origem: "meta", conversationId: convId });
-    }
-
-    if (!convId) return null;
-
+  // Tenta enviar para conversa existente
+  if (convId) {
     try {
       await enviarParaConversa(convId);
       return convId;
-    } catch (erro404) {
-      // Conversa foi deletada no Chatwoot — cria uma nova
-      const status = erro404?.response?.status || 0;
-      const msg = erro404?.response?.data?.error || erro404.message || "";
-      if (status === 404 || msg.includes("not found") || msg.includes("could not be found")) {
-        console.log(`⚠️ Conversa ${convId} não existe mais no Chatwoot. Criando nova...`);
+    } catch (erro) {
+      const status = erro?.response?.status || 0;
+      console.log(`⚠️ Erro ao espelhar (status ${status}) para conversa ${convId}: ${erro.message}`);
+      if (status === 404) {
+        // Conversa deletada — limpa cache e cria nova abaixo
+        console.log(`🗑️ Conversa ${convId} deletada. Limpando cache e criando nova...`);
         atualizarUltimoCanal(from, { conversationId: null });
-        const novoConvId = await criarConversaChatwoot(from, nomeCliente || "Associado");
-        if (novoConvId) {
-          atualizarUltimoCanal(from, { origem: "meta", conversationId: novoConvId });
-          await enviarParaConversa(novoConvId);
-          return novoConvId;
-        }
+        convId = null;
       } else {
-        throw erro404;
+        console.error("❌ Erro ao espelhar no Chatwoot:", erro.response?.data || erro.message);
+        return null;
       }
     }
+  }
 
-    return null;
+  // Cria nova conversa (primeira vez ou após 404)
+  try {
+    const novoConvId = await criarConversaChatwoot(from, nomeCliente || "Associado");
+    if (!novoConvId) return null;
+    atualizarUltimoCanal(from, { origem: "meta", conversationId: novoConvId });
+    await enviarParaConversa(novoConvId);
+    console.log(`✅ Nova conversa criada no Chatwoot: ${novoConvId}`);
+    return novoConvId;
   } catch (erro) {
-    console.error("❌ Erro ao espelhar mensagem no Chatwoot:", erro.response?.data || erro.message);
+    console.error("❌ Erro ao criar nova conversa no Chatwoot:", erro.response?.data || erro.message);
     return null;
   }
 }
