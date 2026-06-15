@@ -910,20 +910,51 @@ async function processarAvaliacao(from, texto, contexto = {}) {
 // =============================================================================
 async function processarPagamento(from, bodyText, contexto = {}) {
   const http = axiosInterno();
-  const somenteNumeros = limparNumeros(bodyText);
   let payload = { tipo: 2, cpf: "", cnpj: "", placa: "" };
 
-  if (parecePlaca(bodyText)) {
-    payload.tipo = 1;
-    payload.placa = normalizarPlaca(bodyText);
-  } else if (somenteNumeros.length === 11) {
-    payload.tipo = 2;
-    payload.cpf = somenteNumeros;
-  } else if (somenteNumeros.length === 14) {
-    payload.tipo = 3;
-    payload.cnpj = somenteNumeros;
-  } else {
-    await enviarTextoCanal(from, "❌ Envie uma placa, CPF (11 dígitos) ou CNPJ (14 dígitos) válido.", contexto);
+  // Tenta extrair o primeiro dado válido do texto
+  // (resolve casos onde cliente manda placa + CPF juntos)
+  const palavras = String(bodyText || "").trim().split(/\s+/);
+  let dadoEncontrado = false;
+
+  for (const palavra of palavras) {
+    if (parecePlaca(palavra)) {
+      payload.tipo = 1;
+      payload.placa = normalizarPlaca(palavra);
+      dadoEncontrado = true;
+      break;
+    }
+    const nums = limparNumeros(palavra);
+    if (nums.length === 11) {
+      payload.tipo = 2;
+      payload.cpf = nums;
+      dadoEncontrado = true;
+      break;
+    }
+    if (nums.length === 14) {
+      payload.tipo = 3;
+      payload.cnpj = nums;
+      dadoEncontrado = true;
+      break;
+    }
+  }
+
+  // Tenta também no texto completo sem espaços (ex: CPF colado junto)
+  if (!dadoEncontrado) {
+    const somenteNumeros = limparNumeros(bodyText);
+    if (somenteNumeros.length === 11) {
+      payload.tipo = 2;
+      payload.cpf = somenteNumeros;
+      dadoEncontrado = true;
+    } else if (somenteNumeros.length === 14) {
+      payload.tipo = 3;
+      payload.cnpj = somenteNumeros;
+      dadoEncontrado = true;
+    }
+  }
+
+  if (!dadoEncontrado) {
+    await enviarTextoCanal(from, "❌ Não reconheci os dados. Envie a *placa*, *CPF* (11 dígitos) ou *CNPJ* (14 dígitos) separadamente.", contexto);
     return;
   }
 
@@ -975,7 +1006,38 @@ async function processarPagamento(from, bodyText, contexto = {}) {
     const comBoleto = dados.veiculos.filter(existeBoletoDisponivel);
 
     if (comBoleto.length === 0) {
-      await enviarTextoCanal(from, `⚠️ ${dados?.mensagem || "Cadastro encontrado, mas não há participação mensal em aberto no momento."}`, contexto);
+      // Verifica se pode ser caso de atraso > 3 dias (precisa de vistoria)
+      const temVeiculoComVencimento = Array.isArray(dados.veiculos) && dados.veiculos.some(
+        (v) => v.vencimento && v.vencimento !== "ND"
+      );
+
+      if (temVeiculoComVencimento) {
+        // Cadastro encontrado mas sem boleto disponível — provável atraso > 3 dias
+        await enviarTextoCanal(
+          from,
+          `⚠️ *Pagamento não localizado ou boleto indisponível.*
+
+` +
+          `Se o seu vencimento passou há mais de *3 dias*, o sistema exige uma *nova vistoria* do veículo antes de gerar um novo boleto.
+
+` +
+          `📱 Para realizar a vistoria, acesse o aplicativo AVSEG:
+` +
+          `🔍 Menu > Vistoria > Iniciar
+
+` +
+          `Se precisar de ajuda, digite *5* para falar com um atendente.`,
+          contexto,
+        );
+      } else {
+        await enviarTextoCanal(
+          from,
+          `⚠️ ${dados?.mensagem || "Cadastro encontrado, mas não há participação mensal em aberto no momento."}
+
+Se precisar de ajuda, digite *5* para falar com um atendente.`,
+          contexto,
+        );
+      }
       estadoUsuario[from] = null;
       return;
     }
@@ -1235,9 +1297,13 @@ Responda SEMPRE em JSON com este formato exato:
 
 ### Tipos de intenção e ações:
 
-**PAGAMENTO_CONFIRMADO** → Cliente diz que já pagou, enviou comprovante, efetuou pagamento
+**PAGAMENTO_CONFIRMADO** → Cliente diz que JÁ pagou, JÁ efetuou o pagamento, JÁ enviou comprovante (ação concluída)
 - acao: "NENHUMA"
 - resposta: Agradeça, informe que o pagamento pode levar até 2 dias úteis para processar e que a proteção continua ativa.
+
+**OFERTA_COMPROVANTE** → Cliente diz que TEM o comprovante e QUER enviar, mas ainda não enviou (ex: "tenho o comprovante", "posso enviar", "vou mandar", "estou com o comprovante")
+- acao: "NENHUMA"
+- resposta: Solicite que envie o comprovante para que possamos verificar e registrar o pagamento.
 
 **QUER_BOLETO_SEM_DADOS** → Cliente pede 2ª via, boleto, link de pagamento, como pagar, SEM informar placa ou CPF
 - acao: "PEDIR_DADOS"
