@@ -533,6 +533,11 @@ app.post("/chatwoot-bot", async (req, res) => {
 
     if (messageTypeNome === "outgoing") {
       await enviarTexto(telefone, content);
+
+      // Ativa modo humano automaticamente quando atendente responde
+      // Assim o bot fica silencioso enquanto atendente está atendendo
+      app.emit("ativar_modo_humano", { telefone, conversationId: body.conversation?.id });
+
       return res.status(200).json({ ok: true, sent_to_whatsapp: telefone });
     }
 

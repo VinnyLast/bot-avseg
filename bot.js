@@ -1311,13 +1311,17 @@ Responda SEMPRE em JSON com este formato exato:
 
 ### Tipos de intenção e ações:
 
-**PAGAMENTO_CONFIRMADO** → Cliente diz que JÁ pagou, JÁ efetuou o pagamento, JÁ enviou comprovante (ação concluída)
+**PAGAMENTO_CONFIRMADO** → Cliente diz que JÁ pagou, JÁ efetuou o pagamento, JÁ enviou comprovante de PAGAMENTO (ação concluída). Atenção: comprovante de pagamento é diferente de vídeo de vistoria.
 - acao: "NENHUMA"
 - resposta: Agradeça pelo aviso sem confirmar que o pagamento foi recebido. Informe que pagamentos podem levar até 2 dias úteis para serem identificados no sistema e que assim que processado tudo fica em dia automaticamente. Não use palavras como "recebemos", "confirmamos" ou "já está registrado".
 
-**OFERTA_COMPROVANTE** → Cliente diz que TEM o comprovante e QUER enviar, mas ainda não enviou (ex: "tenho o comprovante", "posso enviar", "vou mandar", "estou com o comprovante")
+**OFERTA_COMPROVANTE** → Cliente diz que TEM o comprovante de PAGAMENTO e QUER enviar, mas ainda não enviou (ex: "tenho o comprovante", "posso enviar", "vou mandar", "estou com o comprovante")
 - acao: "NENHUMA"
 - resposta: Solicite que envie o comprovante para que possamos verificar e registrar o pagamento.
+
+**VISTORIA_ENVIANDO** → Cliente enviou ou está enviando vídeo/foto de vistoria do veículo
+- acao: "HUMANO"
+- resposta: Agradeça pelo envio e informe que vai conectar com um atendente para verificar e dar continuidade ao processo de vistoria.
 
 **QUER_BOLETO_SEM_DADOS** → Cliente pede 2ª via, boleto, link de pagamento, como pagar, SEM informar placa ou CPF
 - acao: "PEDIR_DADOS"
@@ -1352,6 +1356,10 @@ Responda SEMPRE em JSON com este formato exato:
 - acao: "NENHUMA"
 - resposta: Oriente a digitar *menu* e escolher a opção *3* (Assistência 24h).
 
+**DUVIDA_HORARIO** → Cliente pergunta sobre horário de atendimento, até que horas pode enviar, quando abre, quando fecha
+- acao: "NENHUMA"
+- resposta: Informe o horário de atendimento (Segunda a sexta 08h às 18h, Sábado 08h às 12h). Diga que mensagens e comprovantes podem ser enviados a qualquer hora pelo WhatsApp.
+
 **DUVIDA_GERAL** → Dúvida sobre a proteção, cobertura, funcionamento
 - acao: "HUMANO"
 - resposta: Informe que vai conectar com um atendente para esclarecer.
@@ -1363,6 +1371,14 @@ Responda SEMPRE em JSON com este formato exato:
 **OUTRO** → Qualquer coisa que não se encaixe acima
 - acao: "NENHUMA"
 - resposta: Responda de forma amigável e sugira digitar *menu*.
+
+## INFORMAÇÕES DA EMPRESA
+- Horário de atendimento das atendentes humanas: Segunda a sexta 08h às 18h, Sábado 08h às 12h, Domingo fechado
+- O bot funciona 24 horas, mas atendentes humanas só respondem no horário comercial
+- Comprovantes, vídeos e mensagens podem ser enviados a qualquer hora pelo WhatsApp — serão verificados no próximo horário comercial
+- O processamento de pagamentos pode levar até 2 dias úteis
+- Após 3 dias de atraso no pagamento, é necessária nova vistoria para reativar a proteção
+- Para dúvidas sobre cobertura, sinistro ou cancelamento, sempre escalar para humano
 
 ## REGRAS DE RESPOSTA
 - Máximo 3 linhas por resposta
@@ -1495,6 +1511,22 @@ app.on("wa_message", async ({ from, bodyText, msgType, message, nomeCliente }) =
 // =============================================================================
 // EVENTOS — CHATWOOT
 // =============================================================================
+// Ativa modo humano automaticamente quando atendente responde pelo Chatwoot
+app.on("ativar_modo_humano", ({ telefone, conversationId }) => {
+  const numero = normalizarTelefoneBR(telefone);
+  if (!numero) return;
+
+  if (!modoHumano.has(numero)) {
+    modoHumano.add(numero);
+    estadoUsuario[numero] = null;
+    console.log(`👤 Modo humano ativado automaticamente para ${numero} (atendente respondeu)`);
+  }
+
+  if (conversationId) {
+    atualizarUltimoCanal(numero, { conversationId });
+  }
+});
+
 app.on("chatwoot_message", async ({ from, bodyText, conversationId, raw }) => {
   atualizarUltimoCanal(from, {
     origem: "chatwoot",
