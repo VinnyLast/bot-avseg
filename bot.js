@@ -365,6 +365,19 @@ function axiosInterno() {
 function atualizarUltimoCanal(from, dados = {}) {
   const numero = normalizarTelefoneBR(from);
   if (!numero) return;
+
+  // Se conversationId for null, limpa completamente o canal
+  if (dados.conversationId === null) {
+    ultimoCanalPorNumero[numero] = { origem: "meta", conversationId: null };
+    // Remove do arquivo persistente
+    try {
+      const canais = carregarJson(ARQUIVO_CANAIS, {});
+      delete canais[numero];
+      salvarJson(ARQUIVO_CANAIS, canais);
+    } catch (_) {}
+    return;
+  }
+
   ultimoCanalPorNumero[numero] = { ...ultimoCanalPorNumero[numero], ...dados };
   // Persiste em arquivo se tiver conversationId
   if (ultimoCanalPorNumero[numero]?.conversationId) {
