@@ -1313,7 +1313,7 @@ Responda SEMPRE em JSON com este formato exato:
 
 **PAGAMENTO_CONFIRMADO** → Cliente diz que JÁ pagou, JÁ efetuou o pagamento, JÁ enviou comprovante (ação concluída)
 - acao: "NENHUMA"
-- resposta: Agradeça, informe que o pagamento pode levar até 2 dias úteis para processar e que a proteção continua ativa.
+- resposta: Agradeça pelo aviso sem confirmar que o pagamento foi recebido. Informe que pagamentos podem levar até 2 dias úteis para serem identificados no sistema e que assim que processado tudo fica em dia automaticamente. Não use palavras como "recebemos", "confirmamos" ou "já está registrado".
 
 **OFERTA_COMPROVANTE** → Cliente diz que TEM o comprovante e QUER enviar, mas ainda não enviou (ex: "tenho o comprovante", "posso enviar", "vou mandar", "estou com o comprovante")
 - acao: "NENHUMA"
