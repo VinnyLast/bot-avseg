@@ -486,7 +486,7 @@ async function enviarMensagemClienteChatwoot(conversationId, texto) {
     console.log(`✅ Mensagem do cliente enviada ao Chatwoot conv=${conversationId}:`, response.data?.id || "ok");
     return response.data;
   } catch (erro) {
-    console.error("❌ Erro ao enviar mensagem do cliente para Chatwoot:", erro.response?.data || erro.message);
+    console.error("❌ Erro ao enviar mensagem do associado para Chatwoot:", erro.response?.data || erro.message);
   }
 }
 
@@ -1264,12 +1264,19 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
     "certo", "entendi", "ok", "blz", "beleza", "perfeito", "ótimo", "massa",
   ];
 
+  // Ignora mídia — imagem, vídeo, áudio, documento e reaction
+  // O atendente humano verifica e responde no Chatwoot
+  const ehMidia = ["image", "video", "audio", "document", "sticker", "reaction"].includes(msgType);
+  if (ehMidia) {
+    console.log(`⏭️ Mídia ignorada pelo bot (${msgType}): ${from}`);
+    return;
+  }
+
   const ehRespostaNatural =
-    msgType === "reaction" ||
     respostasNaturais.some((t) => texto.toLowerCase().includes(t));
 
   if (ehRespostaNatural) {
-    console.log(`⏭️ Mensagem ignorada pelo bot (natural/reaction): ${from}`);
+    console.log(`⏭️ Mensagem ignorada pelo bot (natural): ${from}`);
     return;
   }
 
@@ -1289,15 +1296,22 @@ async function processarComIA(from, bodyText, msgType, message, contexto = {}) {
 
     // Monta conteúdo para a IA
     let mensagemCliente = String(bodyText || "").trim();
-    if (ehImagem) mensagemCliente = `[Cliente enviou ${msgType === "image" ? "uma imagem/comprovante" : "um documento"}]${mensagemCliente ? `: ${mensagemCliente}` : ""}`;
-    if (ehAudio) mensagemCliente = "[Cliente enviou um áudio]";
+    if (msgType === "image") {
+      mensagemCliente = `[Associado enviou uma imagem/foto${mensagemCliente ? `: ${mensagemCliente}` : ""}]`;
+    } else if (msgType === "document") {
+      mensagemCliente = `[Associado enviou um documento PDF${mensagemCliente ? `: ${mensagemCliente}` : ""}]`;
+    } else if (msgType === "video") {
+      mensagemCliente = `[Associado enviou um vídeo${mensagemCliente ? `: ${mensagemCliente}` : ""}]`;
+    } else if (ehAudio) {
+      mensagemCliente = `[Associado enviou um áudio${mensagemCliente ? `: ${mensagemCliente}` : ""}]`;
+    }
     if (!mensagemCliente) mensagemCliente = `[Mensagem do tipo ${msgType}]`;
 
     const systemPrompt = `Você é um assistente virtual da AVSEG Proteção Veicular, empresa de proteção de veículos em Feira de Santana, Bahia.
 
 Você recebe mensagens de associados que responderam a notificações automáticas (lembretes de vencimento, cobranças) ou entraram em contato pelo WhatsApp.
 
-Seu papel é classificar a intenção do cliente e responder de forma natural, cordial e profissional em português brasileiro.
+Seu papel é classificar a intenção do associado e responder de forma natural, cordial e profissional em português brasileiro.
 
 ## REGRAS DE CLASSIFICAÇÃO
 
@@ -1311,56 +1325,56 @@ Responda SEMPRE em JSON com este formato exato:
 
 ### Tipos de intenção e ações:
 
-**PAGAMENTO_CONFIRMADO** → Cliente diz que JÁ pagou, JÁ efetuou o pagamento, JÁ enviou comprovante de PAGAMENTO (ação concluída). Atenção: comprovante de pagamento é diferente de vídeo de vistoria.
+**PAGAMENTO_CONFIRMADO** → Associado diz que JÁ pagou, JÁ efetuou o pagamento, JÁ enviou comprovante de PAGAMENTO (ação concluída). Atenção: comprovante de pagamento é diferente de vídeo de vistoria.
 - acao: "NENHUMA"
 - resposta: Agradeça pelo aviso sem confirmar que o pagamento foi recebido. Informe que pagamentos podem levar até 2 dias úteis para serem identificados no sistema e que assim que processado tudo fica em dia automaticamente. Não use palavras como "recebemos", "confirmamos" ou "já está registrado".
 
-**OFERTA_COMPROVANTE** → Cliente diz que TEM o comprovante de PAGAMENTO e QUER enviar, mas ainda não enviou (ex: "tenho o comprovante", "posso enviar", "vou mandar", "estou com o comprovante")
+**OFERTA_COMPROVANTE** → Associado diz que TEM o comprovante de PAGAMENTO e QUER enviar, mas ainda não enviou (ex: "tenho o comprovante", "posso enviar", "vou mandar", "estou com o comprovante")
 - acao: "NENHUMA"
 - resposta: Solicite que envie o comprovante para que possamos verificar e registrar o pagamento.
 
-**VISTORIA_ENVIANDO** → Cliente enviou ou está enviando vídeo/foto de vistoria do veículo
+**VISTORIA_ENVIANDO** → Associado enviou vídeo ou foto do veículo especificamente para vistoria (não é comprovante de pagamento nem documento PDF)
 - acao: "HUMANO"
 - resposta: Agradeça pelo envio e informe que vai conectar com um atendente para verificar e dar continuidade ao processo de vistoria.
 
-**QUER_BOLETO_SEM_DADOS** → Cliente pede 2ª via, boleto, link de pagamento, como pagar, SEM informar placa ou CPF
+**QUER_BOLETO_SEM_DADOS** → Associado pede 2ª via, boleto, link de pagamento, como pagar, SEM informar placa ou CPF
 - acao: "PEDIR_DADOS"
-- resposta: Peça a placa ou CPF para buscar o boleto.
+- resposta: Peça a placa ou CPF do associado para buscar o boleto.
 
-**QUER_BOLETO_COM_DADOS** → Cliente pede boleto E já informa a placa ou CPF na mesma mensagem (ex: "minha placa é ABC1234", "preciso pagar, CPF 123")
+**QUER_BOLETO_COM_DADOS** → Associado pede boleto E já informa a placa ou CPF na mesma mensagem (ex: "minha placa é ABC1234", "preciso pagar, CPF 123")
 - acao: "BUSCAR_BOLETO"
 - resposta: "" (vazio, o sistema vai buscar automaticamente)
 - dados: extraia a placa ou CPF mencionado
 
-**COTACAO** → Cliente quer fazer cotação, saber o preço, tem interesse em contratar
+**COTACAO** → Associado quer fazer cotação, saber o preço, tem interesse em contratar
 - acao: "NENHUMA"  
 - resposta: Oriente a acessar a opção *1* no menu ou digitar *menu*.
 
-**VISTORIA** → Cliente pergunta sobre vistoria, como fazer, prazo
+**VISTORIA** → Associado pergunta sobre vistoria, como fazer, prazo
 - acao: "NENHUMA"
 - resposta: Oriente a acessar a opção *4* no menu ou digitar *menu*.
 
-**VEICULO_INCORRETO** → Cliente diz que a placa não é dele, vendeu o veículo, veículo de outra pessoa
+**VEICULO_INCORRETO** → Associado diz que a placa não é dele, vendeu o veículo, veículo de outra pessoa
 - acao: "HUMANO"
 - resposta: Demonstre empatia e informe que vai conectar com um atendente para resolver.
 
-**RECLAMACAO** → Cliente reclama, está frustrado, insatisfeito, questiona cobrança indevida
+**RECLAMACAO** → Associado reclama, está frustrado, insatisfeito, questiona cobrança indevida
 - acao: "HUMANO"
 - resposta: Demonstre empatia, peça desculpas e informe que vai conectar com um atendente.
 
-**CANCELAMENTO** → Cliente quer cancelar, encerrar o plano
+**CANCELAMENTO** → Associado quer cancelar, encerrar o plano
 - acao: "HUMANO"
 - resposta: Demonstre empatia e informe que vai conectar com um atendente especializado.
 
-**SINISTRO** → Cliente teve acidente, roubo, furto, colisão, incêndio — mas está fora do submenu de assistência
+**SINISTRO** → Associado teve acidente, roubo, furto, colisão, incêndio — mas está fora do submenu de assistência
 - acao: "NENHUMA"
 - resposta: Oriente a digitar *menu* e escolher a opção *3* (Assistência 24h).
 
-**DUVIDA_HORARIO** → Cliente pergunta sobre horário de atendimento, até que horas pode enviar, quando abre, quando fecha
+**DUVIDA_HORARIO** → Associado pergunta sobre horário de atendimento, até que horas pode enviar, quando abre, quando fecha
 - acao: "NENHUMA"
 - resposta: Informe o horário de atendimento (Segunda a sexta 08h às 18h, Sábado 08h às 12h). Diga que mensagens e comprovantes podem ser enviados a qualquer hora pelo WhatsApp.
 
-**DUVIDA_GERAL** → Dúvida sobre a proteção, cobertura, funcionamento
+**DUVIDA_GERAL** → Dúvida do associado sobre a proteção, cobertura, funcionamento
 - acao: "HUMANO"
 - resposta: Informe que vai conectar com um atendente para esclarecer.
 
