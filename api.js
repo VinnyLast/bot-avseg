@@ -947,33 +947,51 @@ async function i9BuscarUrlPorPlaca(placa) {
 // =============================================================================
 async function i9VerificarCadastro({ placa, cpf, cnpj }) {
   try {
-    let tipo = 1;
-    if (cpf) tipo = 2;
-    if (cnpj) tipo = 3;
+    let tipoConsulta = 1;
+    if (cpf) tipoConsulta = 2;
+    if (cnpj) tipoConsulta = 3;
 
-    const payload = {
+    const payloadBase = {
       token: TOKEN_I9,
-      tipo,
       placa: normalizarPlaca(placa || ""),
       cpf: normalizarDocumento(cpf || ""),
       cnpj: normalizarDocumento(cnpj || ""),
     };
 
-    const resposta = await axios.post(I9_BOLETO_URL, payload, {
+    // Consulta tipo 1 (a vencer)
+    const resposta1 = await axios.post(I9_BOLETO_URL, { ...payloadBase, tipo: tipoConsulta }, {
       headers: { "Content-Type": "application/json" },
       timeout: 15000,
     });
 
-    const veiculos = Array.isArray(resposta.data?.veiculos) ? resposta.data.veiculos : [];
+    const veiculos1 = Array.isArray(resposta1.data?.veiculos) ? resposta1.data.veiculos : [];
 
-    if (veiculos.length === 0) return "nao_cadastrado";
+    if (veiculos1.length === 0) return "nao_cadastrado";
 
-    // Verifica se todos os veículos têm vencimento ND (já pagou)
-    const todosND = veiculos.every(
-      (v) => (!v.vencimento || v.vencimento === "ND") && (!v.valor || v.valor === "ND")
+    // Verifica se tem boleto em aberto
+    const temEmAberto = veiculos1.some(
+      (v) => v.vencimento && v.vencimento !== "ND" && v.valor && v.valor !== "ND"
     );
 
-    return todosND ? "pago" : "em_aberto";
+    if (temEmAberto) return "em_aberto";
+
+    // Todos ND — pode ser pago ou em atraso. Consulta tipo 2 para verificar atraso
+    try {
+      const resposta2 = await axios.post(I9_BOLETO_URL, { ...payloadBase, tipo: tipoConsulta === 1 ? 2 : tipoConsulta }, {
+        headers: { "Content-Type": "application/json" },
+        timeout: 15000,
+      });
+
+      const veiculos2 = Array.isArray(resposta2.data?.veiculos) ? resposta2.data.veiculos : [];
+      const temAtraso = veiculos2.some(
+        (v) => v.vencimento && v.vencimento !== "ND"
+      );
+
+      if (temAtraso) return "em_atraso";
+    } catch (_) {}
+
+    // Sem boleto a vencer e sem atraso = pago
+    return "pago";
   } catch (erro) {
     console.warn("⚠️ I9 verificar cadastro:", erro.message);
     return "erro";
@@ -1439,13 +1457,27 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
     if (statusI9 === "pago") {
       statusFinal = "pago";
       mensagemFinal =
-        `✅ *Pagamento identificado!*
+        `✅ *Sem pendências encontradas!*
 
 ` +
-        `Seu boleto referente a *${entradaExibicao}* consta como pago em nosso sistema.
+        `Não há boleto em aberto para *${entradaExibicao}* no momento. O pagamento pode já ter sido processado.
 
 ` +
-        `Caso tenha alguma dúvida, digite *5* para falar com um atendente ou *menu* para ver as opções.`;
+        `Se tiver dúvidas, digite *5* para falar com um atendente.`;
+    } else if (statusI9 === "em_atraso") {
+      statusFinal = "nao_encontrado";
+      mensagemFinal =
+        `⚠️ *Identificamos um boleto em atraso.*
+
+` +
+        `Como o vencimento passou há mais de 3 dias, será necessária uma *nova vistoria* para regularizar sua proteção.
+
+` +
+        `📱 Acesse o aplicativo AVSEG:
+🔍 Menu > Vistoria > Iniciar
+
+` +
+        `Se precisar de ajuda, digite *5* para falar com um atendente.`;
     } else if (statusI9 === "nao_cadastrado") {
       // Verifica no South se existe cadastro
       try {
