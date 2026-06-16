@@ -1405,36 +1405,35 @@ Assim que retornarmos, seu envio será verificado. ✅
     estadoUsuario[from] = null;
     if (temChatwootConfigurado()) {
       try {
+        // Garante que existe uma conversa — cria se não existir
         let convId = contexto.conversationId || obterUltimoCanal(from)?.conversationId;
         if (!convId) {
           convId = await criarConversaChatwoot(from, nomeCliente || "Associado");
+          if (convId) atualizarUltimoCanal(from, { origem: "meta", conversationId: convId });
         } else {
           await abrirConversaHumanaChatwoot(convId);
         }
+
         if (convId) {
           atualizarUltimoCanal(from, { conversationId: convId });
-          await enviarTextoChatwoot(convId, `📎 Associado enviou mídia (${msgType}). Aguardando verificação do atendente.
 
-📱 Número: +${from}`, true);
-        }
-      } catch (erroChat) {
-        const status404 = erroChat?.response?.status === 404;
-        if (status404) {
-          console.log(`⚠️ Conversa deletada ao escalar mídia. Limpando cache: ${from}`);
-          atualizarUltimoCanal(from, { conversationId: null });
-          // Tenta criar nova conversa e reenviar
+          // Tenta enviar o anexo real no Chatwoot
           try {
-            const novoConvId = await criarConversaChatwoot(from, nomeCliente || "Associado");
-            if (novoConvId) {
-              atualizarUltimoCanal(from, { origem: "meta", conversationId: novoConvId });
-              await enviarTextoChatwoot(novoConvId, `📎 Associado enviou mídia (${msgType}). Aguardando verificação do atendente.
+            const anexoEnviado = await enviarAnexoClienteChatwoot(convId, message);
+            if (!anexoEnviado) {
+              // Fallback: nota privada se não conseguir enviar o anexo
+              await enviarTextoChatwoot(convId, `📎 Associado enviou mídia (${msgType}). Aguardando verificação do atendente.
 
 📱 Número: +${from}`, true);
             }
-          } catch (_) {}
-        } else {
-          console.error("❌ Erro ao escalar mídia para Chatwoot:", erroChat.message);
+          } catch (_) {
+            await enviarTextoChatwoot(convId, `📎 Associado enviou mídia (${msgType}). Aguardando verificação do atendente.
+
+📱 Número: +${from}`, true);
+          }
         }
+      } catch (erroChat) {
+        console.error("❌ Erro ao escalar mídia para Chatwoot:", erroChat.message);
       }
     }
     return;
