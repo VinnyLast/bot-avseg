@@ -6,7 +6,7 @@ const fs = require("fs");
 const path = require("path");
 
 const TEMPLATE_MAP = {
-  lembrete_5: "lembrete_5_dias",
+  // lembrete_5: "lembrete_5_dias", // DESATIVADO TEMPORARIAMENTE
   lembrete_2: "lembrete_2_dia",
   cobranca_3: "aviso_pendencia_3_dias",
   cobranca_4: "aviso_pendencia_4_dias",
@@ -1697,6 +1697,7 @@ async function fallbackSimples(from, contexto = {}) {
 // EVENTOS — META
 // =============================================================================
 app.on("wa_message", async ({ from, bodyText, msgType, message, nomeCliente }) => {
+  ultimaMensagemRecebida = Date.now(); // Atualiza watchdog
   await processarMensagem({ from, bodyText, origem: "meta", msgType, message, nomeCliente });
 });
 
@@ -1877,3 +1878,23 @@ app.get("/canais", protegerRotaInterna, (req, res) => {
 });
 
 console.log(`🤖 Bot iniciado. TEST_MODE=${TEST_MODE ? "ON" : "OFF"} | CHATWOOT=${temChatwootConfigurado() ? "ON" : "OFF"}`);
+
+// =============================================================================
+// WATCHDOG — reinicia automaticamente se ficar sem receber mensagens por 30min
+// =============================================================================
+let ultimaMensagemRecebida = Date.now();
+const WATCHDOG_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
+
+setInterval(() => {
+  const agora = Date.now();
+  const semMensagem = agora - ultimaMensagemRecebida;
+
+  // Só verifica em horário comercial (08h-22h Brasil)
+  const horaBrasil = (new Date().getUTCHours() - 3 + 24) % 24;
+  if (horaBrasil < 8 || horaBrasil >= 22) return;
+
+  if (semMensagem > WATCHDOG_TIMEOUT_MS) {
+    console.log(`⚠️ WATCHDOG: sem mensagens há ${Math.round(semMensagem / 60000)} minutos. Reiniciando processo...`);
+    process.exit(0); // PM2 reinicia automaticamente
+  }
+}, 5 * 60 * 1000); // Verifica a cada 5 minutos
