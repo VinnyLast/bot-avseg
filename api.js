@@ -532,11 +532,51 @@ app.post("/chatwoot-bot", async (req, res) => {
     }
 
     if (messageTypeNome === "outgoing") {
-      await enviarTexto(telefone, content);
+      // Verifica se tem anexos na mensagem (PDF, imagem, etc)
+      const messageId = body.id;
+      const conversationId = body.conversation?.id;
+      let anexosEnviados = false;
+
+      if (messageId && conversationId && temChatwootConfigurado()) {
+        try {
+          // Busca a mensagem completa via API do Chatwoot para pegar anexos
+          const urlMsg = `${process.env.CHATWOOT_BASE_URL}/api/v1/accounts/${process.env.CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/messages`;
+          const resMsg = await axios.get(urlMsg, {
+            headers: { api_access_token: process.env.CHATWOOT_API_TOKEN },
+            timeout: 10000,
+          });
+          const mensagens = resMsg.data?.payload || [];
+          const msgAtual = mensagens.find(m => m.id === messageId);
+          const attachments = msgAtual?.attachments || [];
+
+          for (const att of attachments) {
+            const fileUrl = att.data_url || att.file_url;
+            const fileName = att.file_name || "arquivo";
+            const mimeType = att.content_type || "application/octet-stream";
+
+            if (!fileUrl) continue;
+
+            console.log(`📎 Enviando anexo do atendente para WhatsApp: ${fileName}`);
+
+            if (mimeType.startsWith("image/")) {
+              await enviarImagem(telefone, fileUrl, content !== "." ? content : "");
+            } else {
+              await enviarDocumento(telefone, fileUrl, fileName, content !== "." ? content : "");
+            }
+            anexosEnviados = true;
+          }
+        } catch (erroAnexo) {
+          console.error("❌ Erro ao buscar anexos do Chatwoot:", erroAnexo.message);
+        }
+      }
+
+      // Envia texto se não for placeholder de anexo
+      if (!anexosEnviados && content && content.trim() !== ".") {
+        await enviarTexto(telefone, content);
+      }
 
       // Ativa modo humano automaticamente quando atendente responde
-      // Assim o bot fica silencioso enquanto atendente está atendendo
-      app.emit("ativar_modo_humano", { telefone, conversationId: body.conversation?.id });
+      app.emit("ativar_modo_humano", { telefone, conversationId });
 
       return res.status(200).json({ ok: true, sent_to_whatsapp: telefone });
     }
@@ -596,6 +636,30 @@ async function enviarImagem(to, imageUrl, caption = "") {
     console.log(`✅ IMAGEM ENVIADA para ${to}:`, response.data);
   } catch (erro) {
     console.error(`❌ ERRO META (imagem):`, erro.response?.data || erro.message);
+  }
+}
+
+async function enviarDocumento(to, docUrl, fileName = "arquivo.pdf", caption = "") {
+  try {
+    const response = await axios.post(
+      `https://graph.facebook.com/v25.0/${WA_PHONE_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "document",
+        document: { link: docUrl, filename: fileName, caption },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${WA_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      },
+    );
+    console.log(`✅ DOCUMENTO ENVIADO para ${to}:`, response.data);
+  } catch (erro) {
+    console.error(`❌ ERRO META (documento):`, erro.response?.data || erro.message);
   }
 }
 
