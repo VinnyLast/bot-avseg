@@ -535,6 +535,8 @@ app.post("/chatwoot-bot", async (req, res) => {
       // Verifica se tem anexos na mensagem (PDF, imagem, etc)
       const messageId = body.id;
       const conversationId = body.conversation?.id;
+      const attachmentsBody = body.attachments || body.content_attributes?.attachments || [];
+      console.log(`📎 Outgoing atendente — attachments no body: ${JSON.stringify(attachmentsBody).slice(0,300)}`);
       let anexosEnviados = false;
 
       if (messageId && conversationId && temChatwootConfigurado()) {

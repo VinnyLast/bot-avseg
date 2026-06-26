@@ -1883,7 +1883,7 @@ console.log(`🤖 Bot iniciado. TEST_MODE=${TEST_MODE ? "ON" : "OFF"} | CHATWOOT
 // WATCHDOG — reinicia automaticamente se ficar sem receber mensagens por 30min
 // =============================================================================
 let ultimaMensagemRecebida = Date.now();
-const WATCHDOG_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutos
+const WATCHDOG_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutos
 
 setInterval(() => {
   const agora = Date.now();
