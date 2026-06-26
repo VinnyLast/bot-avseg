@@ -535,7 +535,7 @@ app.post("/chatwoot-bot", async (req, res) => {
       console.log(`📎 Outgoing atendente — attachments no body: ${JSON.stringify(attachmentsBody).slice(0,300)}`);
       let anexosEnviados = false;
 
-      if (messageId && conversationId && temChatwootConfigurado()) {
+      if (messageId && conversationId && process.env.CHATWOOT_BASE_URL && process.env.CHATWOOT_API_TOKEN) {
         try {
           // Busca a mensagem completa via API do Chatwoot para pegar anexos
           const urlMsg = `${process.env.CHATWOOT_BASE_URL}/api/v1/accounts/${process.env.CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/messages`;
