@@ -501,11 +501,17 @@ app.post("/chatwoot-bot", async (req, res) => {
     // - Atendente real: event=message_created, content no root, tem body.account
     if (messageTypeNome === "outgoing") {
       const temContentNoRoot = Boolean(body.content && String(body.content).trim());
-      const ehEventoMensagem = body.event === "message_created";
+      const ehEventoMensagem = body.event === "message_created" || body.event === "message_updated";
       const temAccount = Boolean(body.account?.id);
+      const temAnexos = Array.isArray(body.attachments) && body.attachments.length > 0;
+
+      // Permite message_updated apenas se tiver anexos (PDF enviado pelo atendente)
+      if (body.event === "message_updated" && !temAnexos) {
+        return;
+      }
 
       // Só envia para WhatsApp se for mensagem real de atendente
-      if (!temContentNoRoot || !ehEventoMensagem || !temAccount) {
+      if ((!temContentNoRoot && !temAnexos) || !ehEventoMensagem || !temAccount) {
         return;
       }
     }
@@ -528,43 +534,29 @@ app.post("/chatwoot-bot", async (req, res) => {
     }
 
     if (messageTypeNome === "outgoing") {
-      // Verifica se tem anexos na mensagem (PDF, imagem, etc)
-      const messageId = body.id;
       const conversationId = body.conversation?.id;
-      const attachmentsBody = body.attachments || body.content_attributes?.attachments || [];
-      console.log(`📎 Outgoing atendente — attachments no body: ${JSON.stringify(attachmentsBody).slice(0,300)}`);
+      const attachments = Array.isArray(body.attachments) ? body.attachments : [];
       let anexosEnviados = false;
 
-      if (messageId && conversationId && process.env.CHATWOOT_BASE_URL && process.env.CHATWOOT_API_TOKEN) {
+      // Envia anexos direto do body (chegam no message_updated)
+      for (const att of attachments) {
+        const fileUrl = att.data_url || att.file_url;
+        const fileName = att.file_name || att.extension ? `arquivo.${att.extension}` : "arquivo.pdf";
+        const mimeType = att.content_type || "application/octet-stream";
+
+        if (!fileUrl) continue;
+
+        console.log(`📎 Enviando anexo do atendente para WhatsApp: ${fileName} (${mimeType})`);
+
         try {
-          // Busca a mensagem completa via API do Chatwoot para pegar anexos
-          const urlMsg = `${process.env.CHATWOOT_BASE_URL}/api/v1/accounts/${process.env.CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/messages`;
-          const resMsg = await axios.get(urlMsg, {
-            headers: { api_access_token: process.env.CHATWOOT_API_TOKEN },
-            timeout: 10000,
-          });
-          const mensagens = resMsg.data?.payload || [];
-          const msgAtual = mensagens.find(m => m.id === messageId);
-          const attachments = msgAtual?.attachments || [];
-
-          for (const att of attachments) {
-            const fileUrl = att.data_url || att.file_url;
-            const fileName = att.file_name || "arquivo";
-            const mimeType = att.content_type || "application/octet-stream";
-
-            if (!fileUrl) continue;
-
-            console.log(`📎 Enviando anexo do atendente para WhatsApp: ${fileName}`);
-
-            if (mimeType.startsWith("image/")) {
-              await enviarImagem(telefone, fileUrl, content !== "." ? content : "");
-            } else {
-              await enviarDocumento(telefone, fileUrl, fileName, content !== "." ? content : "");
-            }
-            anexosEnviados = true;
+          if (mimeType.startsWith("image/")) {
+            await enviarImagem(telefone, fileUrl, content && content !== "." ? content : "");
+          } else {
+            await enviarDocumento(telefone, fileUrl, fileName, content && content !== "." ? content : "");
           }
-        } catch (erroAnexo) {
-          console.error("❌ Erro ao buscar anexos do Chatwoot:", erroAnexo.message);
+          anexosEnviados = true;
+        } catch (erroAtt) {
+          console.error("❌ Erro ao enviar anexo:", erroAtt.message);
         }
       }
 
