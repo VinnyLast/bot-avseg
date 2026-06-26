@@ -529,7 +529,8 @@ app.post("/chatwoot-bot", async (req, res) => {
 
     const telefone = normalizarTelefoneBR(phoneRaw);
 
-    if (!telefone || !content) {
+    const temAnexosRoot = Array.isArray(body.attachments) && body.attachments.length > 0;
+    if (!telefone || (!content && !temAnexosRoot)) {
       return;
     }
 
