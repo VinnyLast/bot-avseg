@@ -454,6 +454,11 @@ app.post("/webhook", async (req, res) => {
 });
 
 app.post("/chatwoot-bot", async (req, res) => {
+  // Responde imediatamente para evitar timeout do Chatwoot
+  res.status(200).json({ ok: true, received: true });
+
+  // Processa de forma assíncrona
+  setImmediate(async () => {
   try {
     const body = req.body;
 
@@ -487,16 +492,12 @@ app.post("/chatwoot-bot", async (req, res) => {
 
     // Ignora notas privadas
     if (body.private === true || mensagem.private === true) {
-      return res.status(200).json({ ok: true, ignored: "private_note" });
+      return;
     }
 
     // Ignora incoming — são espelhos do que já veio pelo WhatsApp
     if (messageTypeNome === "incoming") {
-      return res.status(200).json({
-        ok: true,
-        ignored: "incoming_ignored_to_prevent_loop",
-        event,
-      });
+      return;
     }
 
     // Distingue mensagens do bot/espelho de mensagens do atendente real:
@@ -510,13 +511,13 @@ app.post("/chatwoot-bot", async (req, res) => {
 
       // Só envia para WhatsApp se for mensagem real de atendente
       if (!temContentNoRoot || !ehEventoMensagem || !temAccount) {
-        return res.status(200).json({ ok: true, ignored: "outgoing_bot_ignored_to_prevent_duplicate" });
+        return;
       }
     }
 
     // Ignora incoming espelhado pelo bot (source_id gerado pelo nosso código)
     if (messageTypeNome === "incoming") {
-      return res.status(200).json({ ok: true, ignored: "incoming_mirror_ignored" });
+      return;
     }
 
     const phoneRaw =
@@ -528,7 +529,7 @@ app.post("/chatwoot-bot", async (req, res) => {
     const telefone = normalizarTelefoneBR(phoneRaw);
 
     if (!telefone || !content) {
-      return res.status(200).json({ ok: true, ignored: "sem telefone ou conteudo" });
+      return;
     }
 
     if (messageTypeNome === "outgoing") {
@@ -580,14 +581,14 @@ app.post("/chatwoot-bot", async (req, res) => {
       // Ativa modo humano automaticamente quando atendente responde
       app.emit("ativar_modo_humano", { telefone, conversationId });
 
-      return res.status(200).json({ ok: true, sent_to_whatsapp: telefone });
+      return;
     }
 
-    return res.status(200).json({ ok: true, ignored: `event ${event} ignored` });
+    return;
   } catch (erro) {
     console.error("❌ Erro no webhook Chatwoot:", erro.response?.data || erro.message);
-    return res.status(500).json({ ok: false, erro: erro.message });
   }
+  }); // fim setImmediate
 });
 
 // =============================================================================
