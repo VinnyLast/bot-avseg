@@ -453,9 +453,18 @@ app.post("/webhook", async (req, res) => {
   });
 });
 
-app.post("/chatwoot-bot", async (req, res) => {
+app.post("/chatwoot-bot", (req, res) => {
+  // Responde imediatamente para evitar timeout do Chatwoot
+  res.status(200).json({ ok: true });
+
+  // Processa de forma assíncrona
+  processarWebhookChatwoot(req.body).catch(err =>
+    console.error("❌ Erro assíncrono Chatwoot:", err.message)
+  );
+});
+
+async function processarWebhookChatwoot(body) {
   try {
-    const body = req.body;
 
     console.log("📩 WEBHOOK CHATWOOT:");
     console.log(JSON.stringify(body, null, 2));
@@ -569,15 +578,14 @@ app.post("/chatwoot-bot", async (req, res) => {
       // Ativa modo humano automaticamente quando atendente responde
       app.emit("ativar_modo_humano", { telefone, conversationId });
 
-      return res.status(200).json({ ok: true, sent_to_whatsapp: telefone });
+      return;
     }
 
-    return res.status(200).json({ ok: true, ignored: `event ${event} ignored` });
+    return;
   } catch (erro) {
     console.error("❌ Erro no webhook Chatwoot:", erro.response?.data || erro.message);
-    return res.status(500).json({ ok: false, erro: erro.message });
   }
-});
+}
 
 // =============================================================================
 // ENVIO DE MENSAGENS
