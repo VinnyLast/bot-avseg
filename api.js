@@ -454,11 +454,6 @@ app.post("/webhook", async (req, res) => {
 });
 
 app.post("/chatwoot-bot", async (req, res) => {
-  // Responde imediatamente para evitar timeout do Chatwoot
-  res.status(200).json({ ok: true, received: true });
-
-  // Processa de forma assíncrona
-  setImmediate(async () => {
   try {
     const body = req.body;
 
@@ -581,14 +576,14 @@ app.post("/chatwoot-bot", async (req, res) => {
       // Ativa modo humano automaticamente quando atendente responde
       app.emit("ativar_modo_humano", { telefone, conversationId });
 
-      return;
+      return res.status(200).json({ ok: true, sent_to_whatsapp: telefone });
     }
 
-    return;
+    return res.status(200).json({ ok: true, ignored: `event ${event} ignored` });
   } catch (erro) {
     console.error("❌ Erro no webhook Chatwoot:", erro.response?.data || erro.message);
+    return res.status(500).json({ ok: false, erro: erro.message });
   }
-  }); // fim setImmediate
 });
 
 // =============================================================================
