@@ -1051,10 +1051,15 @@ async function i9VerificarCadastro({ placa, cpf, cnpj }) {
       );
 
       if (temAtraso) return "em_atraso";
-    } catch (_) {}
 
-    // Sem boleto a vencer e sem atraso = pago
-    return "pago";
+      // Consulta tipo 2 funcionou e não tem atraso = pago
+      return "pago";
+    } catch (erroTipo2) {
+      // Consulta tipo 2 falhou (timeout/erro I9) — não assumir que está pago
+      // Retorna "desconhecido" para não enganar o associado
+      console.warn("⚠️ I9 verificar atraso falhou — status inconclusivo:", erroTipo2.message);
+      return "desconhecido";
+    }
   } catch (erro) {
     console.warn("⚠️ I9 verificar cadastro:", erro.message);
     return "erro";
@@ -1541,6 +1546,24 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
 
 ` +
         `Se precisar de ajuda, digite *5* para falar com um atendente.`;
+    } else if (statusI9 === "desconhecido") {
+      // Não foi possível confirmar se está pago ou em atraso — orienta a falar com atendente
+      statusFinal = "nao_encontrado";
+      mensagemFinal =
+        `⚠️ *Não encontramos boleto em aberto para ${entradaExibicao}.*
+
+` +
+        `Não foi possível verificar a situação completa no momento. Isso pode indicar:
+
+` +
+        `• Pagamento já realizado e em processamento
+` +
+        `• Boleto em atraso aguardando regularização
+
+` +
+        `Por favor, entre em contato com nossa equipe:
+` +
+        `Digite *5* para falar com um atendente.`;
     } else if (statusI9 === "nao_cadastrado") {
       // Verifica no South se existe cadastro
       try {
