@@ -90,6 +90,7 @@ const modoHumano = new Set();
 const usuariosOptOut = carregarOptOut();
 const avaliacoes = [];
 const ultimoCanalPorNumero = Object.create(null);
+const nomesAssociados = {}; // { "5575981234567": "João" }
 
 // Cache para evitar processar a mesma mensagem duas vezes
 const mensagensProcessadas = new Set();
@@ -1012,6 +1013,29 @@ async function processarAvaliacao(from, texto, contexto = {}) {
 }
 
 // =============================================================================
+// IDENTIFICAÇÃO DO ASSOCIADO PELO NOME
+// =============================================================================
+function normalizarNomeAssociado(nomeCompleto) {
+  const primeiro = String(nomeCompleto || "").trim().split(/\s+/)[0] || "";
+  if (!primeiro || primeiro.toUpperCase() === "ND") return null;
+  return primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase();
+}
+
+function salvarNomeAssociado(from, dados) {
+  const nome = dados?.veiculos?.[0]?.nome || dados?.nome;
+  const primeiroNome = normalizarNomeAssociado(nome);
+  if (primeiroNome) {
+    nomesAssociados[from] = primeiroNome;
+    console.log(`👤 Nome salvo para ${from}: ${primeiroNome}`);
+  }
+}
+
+function saudacaoComNome(from) {
+  const nome = nomesAssociados[from];
+  return nome ? `${nome}, ` : "";
+}
+
+// =============================================================================
 // FLUXO DE PAGAMENTO
 // =============================================================================
 async function processarPagamento(from, bodyText, contexto = {}) {
@@ -1081,7 +1105,8 @@ async function processarPagamento(from, bodyText, contexto = {}) {
     }
 
     if (dados?.status === "sucesso" && dados?.mensagemWhatsapp) {
-      await enviarTextoCanal(from, dados.mensagemWhatsapp, contexto);
+      salvarNomeAssociado(from, dados);
+      await enviarTextoCanal(from, saudacaoComNome(from) + dados.mensagemWhatsapp, contexto);
 
       const veiculosComLinha = Array.isArray(dados.veiculos) ? dados.veiculos.filter(existeLinhaDigitavel) : [];
       for (const v of veiculosComLinha) {
@@ -1108,6 +1133,8 @@ async function processarPagamento(from, bodyText, contexto = {}) {
       estadoUsuario[from] = null;
       return;
     }
+
+    salvarNomeAssociado(from, dados);
 
     const comBoleto = dados.veiculos.filter(existeBoletoDisponivel);
 
@@ -1164,7 +1191,8 @@ Se precisar de ajuda, digite *5* para falar com um atendente.`,
 
     for (let i = 0; i < comBoleto.length; i++) {
       const v = comBoleto[i];
-      await enviarTextoCanal(from, montarResumoVeiculo(v, i), contexto);
+      const prefixo = i === 0 ? saudacaoComNome(from) : "";
+      await enviarTextoCanal(from, prefixo + montarResumoVeiculo(v, i), contexto);
       if (existeLinhaDigitavel(v)) {
         await delay(500);
         await enviarTextoCanal(from, String(v.linhadigitavel).replace(/\s+/g, ""), contexto);
@@ -1178,6 +1206,139 @@ Se precisar de ajuda, digite *5* para falar com um atendente.`,
     console.error("Erro no fluxo de pagamento:", erro.message);
     await enviarTextoCanal(from, "❌ Não consegui consultar sua participação mensal agora. Tente novamente em instantes.", contexto);
     estadoUsuario[from] = null;
+  }
+}
+
+// =============================================================================
+// IMAGEM — CLASSIFICAÇÃO COM IA VISION
+// =============================================================================
+async function classificarImagemComIA(base64, mimeType) {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": process.env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 50,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: mimeType, data: base64 } },
+          {
+            type: "text",
+            text: `Classifique esta imagem enviada por um associado de uma empresa de proteção veicular brasileira.
+
+Categorias:
+- COMPROVANTE_PAGAMENTO: comprovante de pagamento, recibo, PIX, transferência, boleto pago, extrato bancário
+- VISTORIA_VEICULO: foto de carro, moto ou caminhão (veículo em si, não documento)
+- DOCUMENTO_BOLETO: boleto bancário, fatura, nota fiscal, documento financeiro
+- IMAGEM_GENERICA: bom dia, meme, foto pessoal, paisagem, qualquer outra coisa
+
+Responda APENAS com uma dessas categorias, sem mais nada.`,
+          },
+        ],
+      }],
+    }),
+  });
+
+  const data = await response.json();
+  const categoria = data?.content?.[0]?.text?.trim().toUpperCase();
+  const validas = ["COMPROVANTE_PAGAMENTO", "VISTORIA_VEICULO", "DOCUMENTO_BOLETO", "IMAGEM_GENERICA"];
+  return validas.includes(categoria) ? categoria : "ERRO_ANALISE";
+}
+
+async function processarImagemComIA(from, message, nomeCliente, contexto = {}) {
+  const nomeClienteValido =
+    nomeCliente && nomeCliente !== "Associado" && nomeCliente !== "Cliente" ? nomeCliente : "";
+  const nomeUsar = nomesAssociados[from] || normalizarNomeAssociado(nomeClienteValido) || "";
+  const saudacao = nomeUsar ? `${nomeUsar}, ` : "";
+
+  try {
+    const mediaId = message?.image?.id;
+    if (!mediaId) throw new Error("Sem media_id");
+
+    const baixado = await baixarMidiaMeta(mediaId);
+    if (!baixado?.buffer) throw new Error("Falha ao baixar imagem");
+
+    const base64 = baixado.buffer.toString("base64");
+    const mimeType = baixado.mimeType || "image/jpeg";
+    const categoria = await classificarImagemComIA(base64, mimeType);
+
+    console.log(`🖼️ Imagem classificada [${from}]: ${categoria}`);
+
+    if (categoria === "COMPROVANTE_PAGAMENTO") {
+      await enviarTextoCanal(
+        from,
+        `${saudacao}obrigado por nos avisar! 🤝 Os pagamentos podem levar até 2 dias úteis para serem identificados no sistema. Assim que processado, tudo fica em dia automaticamente.\n\n*AVSEG Proteção Veicular*`,
+        contexto,
+      );
+      return;
+    }
+
+    if (categoria === "VISTORIA_VEICULO") {
+      await enviarTextoCanal(
+        from,
+        `Obrigado pelo envio! 🤝 Vou conectar você com um atendente para verificar e dar continuidade ao processo de vistoria.\n\n*AVSEG Proteção Veicular*`,
+        contexto,
+      );
+      modoHumano.add(from);
+      estadoUsuario[from] = null;
+      if (temChatwootConfigurado()) {
+        let convId = contexto.conversationId || obterUltimoCanal(from)?.conversationId;
+        if (!convId) convId = await criarConversaChatwoot(from, nomeCliente || "Associado");
+        if (convId) {
+          atualizarUltimoCanal(from, { conversationId: convId });
+          await abrirConversaHumanaChatwoot(convId);
+          await enviarTextoChatwoot(convId, `🖼️ *IA: VISTORIA_ENVIANDO*\n\nAssociado enviou foto de veículo para vistoria.\n📱 +${from}`, true);
+        }
+      }
+      return;
+    }
+
+    if (categoria === "DOCUMENTO_BOLETO") {
+      await enviarTextoCanal(
+        from,
+        `Recebi seu documento! 📄 Para consultar ou gerar a 2ª via do boleto:\n\n• Digite *menu* e escolha a opção *2*\n• Ou envie sua *placa* ou *CPF* diretamente\n\n*AVSEG Proteção Veicular*`,
+        contexto,
+      );
+      return;
+    }
+
+    if (categoria === "IMAGEM_GENERICA") {
+      await enviarTextoCanal(
+        from,
+        `Que imagem bacana! 😊 Posso te ajudar com algo? Digite *menu* para ver as opções disponíveis.\n\n*AVSEG Proteção Veicular*`,
+        contexto,
+      );
+      return;
+    }
+
+    throw new Error("Categoria inválida");
+  } catch (erro) {
+    console.error(`❌ Erro ao analisar imagem [${from}]:`, erro.message);
+    const dentroDoHorario = estaEmHorarioAtendimento();
+    await enviarTextoCanal(
+      from,
+      dentroDoHorario
+        ? `Obrigado pelo envio! 🤝 Um atendente irá verificar em breve.\n\n*AVSEG Proteção Veicular*`
+        : `Obrigado pelo envio! 🤝 Nosso horário de atendimento é:\n\n🗓️ *Segunda a sexta:* 08h às 18h\n🗓️ *Sábado:* 08h às 12h\n\nAssim que retornarmos, seu envio será verificado. ✅\n\n*AVSEG Proteção Veicular*`,
+      contexto,
+    );
+
+    // Escala para humano no fallback
+    modoHumano.add(from);
+    estadoUsuario[from] = null;
+    if (temChatwootConfigurado()) {
+      let convId = contexto.conversationId || obterUltimoCanal(from)?.conversationId;
+      if (!convId) convId = await criarConversaChatwoot(from, nomeCliente || "Associado");
+      if (convId) {
+        atualizarUltimoCanal(from, { conversationId: convId });
+        await enviarTextoChatwoot(convId, `📎 Associado enviou imagem (não classificada). Aguardando verificação.\n📱 +${from}`, true);
+      }
+    }
   }
 }
 
@@ -1381,8 +1542,15 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
     "certo", "entendi", "ok", "blz", "beleza", "perfeito", "ótimo", "massa",
   ];
 
-  // Mídia — responde confirmando recebimento e escala para humano
-  const ehMidia = ["image", "video", "audio", "document", "sticker"].includes(msgType);
+  // Imagem — analisada com IA vision
+  if (msgType === "image") {
+    console.log(`🖼️ Imagem recebida: ${from}`);
+    await processarImagemComIA(from, message, nomeCliente, contexto);
+    return;
+  }
+
+  // Outras mídias — responde confirmando recebimento e escala para humano
+  const ehMidia = ["video", "audio", "document", "sticker"].includes(msgType);
   if (ehMidia) {
     console.log(`📎 Mídia recebida (${msgType}): ${from}`);
     const dentroDoHorario = estaEmHorarioAtendimento();
@@ -1531,6 +1699,10 @@ Responda SEMPRE em JSON com este formato exato:
 - acao: "HUMANO"
 - resposta: Demonstre empatia e informe que vai conectar com um atendente para resolver.
 
+**NOME_INCORRETO** → Associado indica que o nome ou cadastro identificado não é dele (ex: "esse não sou eu", "nome errado", "não é minha placa", "você tá me confundindo")
+- acao: "LIMPAR_NOME"
+- resposta: Peça desculpas pela confusão e solicite placa ou CPF para localizar o cadastro correto.
+
 **RECLAMACAO** → Associado reclama, está frustrado, insatisfeito, questiona cobrança indevida
 - acao: "HUMANO"
 - resposta: Demonstre empatia, peça desculpas e informe que vai conectar com um atendente.
@@ -1643,6 +1815,11 @@ Responda SEMPRE em JSON com este formato exato:
       return;
     }
 
+    if (acao === "LIMPAR_NOME") {
+      delete nomesAssociados[from];
+      estadoUsuario[from] = null;
+    }
+
     if (acao === "HUMANO") {
       // Avisa o cliente e abre no Chatwoot
       if (resposta) await enviarTextoCanal(from, resposta, contexto);
@@ -1717,6 +1894,18 @@ app.on("ativar_modo_humano", ({ telefone, conversationId }) => {
 
   if (conversationId) {
     atualizarUltimoCanal(numero, { conversationId });
+  }
+});
+
+// Libera modo humano automaticamente quando atendente resolve a conversa no Chatwoot
+app.on("liberar_modo_humano", ({ telefone }) => {
+  const numero = normalizarTelefoneBR(telefone);
+  if (!numero) return;
+
+  if (modoHumano.has(numero)) {
+    modoHumano.delete(numero);
+    estadoUsuario[numero] = null;
+    console.log(`✅ Modo humano liberado automaticamente para ${numero} (conversa resolvida)`);
   }
 });
 

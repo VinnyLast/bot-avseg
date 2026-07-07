@@ -471,6 +471,25 @@ async function processarWebhookChatwoot(body) {
 
     const event = body.event;
 
+    // Conversa marcada como resolvida pelo atendente — libera o bot automaticamente
+    if (event === "conversation_status_changed") {
+      const status = body.status || body.conversation?.status;
+      if (status === "resolved") {
+        const phoneRaw =
+          body.meta?.sender?.phone_number ||
+          body.conversation?.meta?.sender?.phone_number ||
+          body.contact?.phone_number ||
+          body.sender?.phone_number ||
+          "";
+        const telefone = normalizarTelefoneBR(phoneRaw);
+        if (telefone) {
+          app.emit("liberar_modo_humano", { telefone });
+          console.log(`✅ conversation_status_changed (resolved) recebido para +${telefone}`);
+        }
+      }
+      return;
+    }
+
     // Normaliza campos — o Chatwoot dispara dois formatos de evento:
     // 1. Evento de mensagem: campos no root (content, message_type, sender, etc.)
     // 2. Evento de conversa: campos dentro de body.messages[0]
