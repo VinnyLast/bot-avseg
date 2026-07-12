@@ -235,7 +235,7 @@ function labelOrigem(origem) {
   if (origem === "bot") return "Bot";
   if (origem === "bot_ia") return "Bot IA";
   if (origem === "atendente") return "Atendente";
-  if (origem === "cliente") return "Cliente";
+  if (origem === "cliente") return "Associado";
   if (origem === "status") return "Status";
   return origem || "-";
 }
@@ -288,7 +288,7 @@ async function carregarConversas() {
   conversasCache.forEach((c) => {
     const telefone = c.telefone;
     if (!telefone) return;
-    const nomeValido = c.nome && c.nome !== "Cliente" && c.nome !== "Associado" && c.tipo !== "status";
+    const nomeValido = c.nome && c.nome !== "Associado" && c.tipo !== "status";
     if (nomeValido) nomesPorTelefone[telefone] = c.nome;
   });
 
@@ -300,7 +300,7 @@ async function carregarConversas() {
       if (!grupos[telefone]) {
         grupos[telefone] = {
           telefone,
-          nome: nomesPorTelefone[telefone] || c.nome || "Cliente",
+          nome: nomesPorTelefone[telefone] || c.nome || "Associado",
           ultimaData: c.data,
           ultimaMensagem: c.mensagem || "-",
           mensagens: [],
@@ -342,8 +342,8 @@ function abrirConversa(telefone) {
     .sort((a, b) => new Date(a.data) - new Date(b.data));
 
   const nome = mensagens.find(
-    (m) => m.nome && m.nome !== "Cliente" && m.nome !== "Associado"
-  )?.nome || "Cliente";
+    (m) => m.nome && m.nome !== "Associado"
+  )?.nome || "Associado";
 
   document.getElementById("chatHeader").textContent = `${nome} — ${telefone}`;
 

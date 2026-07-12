@@ -741,19 +741,19 @@ async function enviarDocumento(to, docUrl, fileName = "arquivo.pdf", caption = "
 // MENSAGENS
 // =============================================================================
 function montarMensagemBoleto(veiculo) {
-  const nome = veiculo.nome || "Cliente";
+  const nome = veiculo.nome || "Associado";
   const placa = veiculo.placa || "ND";
   const vencimento = formatarDataBR(veiculo.vencimento);
   const valor = formatarValorBR(veiculo.valor);
   const url = veiculo.url || "ND";
-  let msg = `💳 *Boleto encontrado com sucesso!*\n\n`;
+  let msg = `💳 *Participação mensal encontrada com sucesso!*\n\n`;
   msg += `👤 *Associado:* ${nome}\n`;
   msg += `🚗 *Placa:* ${placa}\n`;
   msg += `📅 *Vencimento:* ${vencimento}\n`;
   msg += `💰 *Valor:* ${valor}\n`;
 
   if (url && url !== "ND") {
-    msg += `\n🔗 *Acessar boleto:*\n${url}`;
+    msg += `\n🔗 *Acessar participação mensal:*\n${url}`;
   }
 
   return msg;
@@ -765,7 +765,7 @@ function montarMensagemSemResultado(entrada) {
     `Isso pode significar que:\n` +
     `• ✅ O pagamento já foi realizado\n` +
     `• 📋 Os dados informados são de outro titular\n` +
-    `• 🕐 O boleto ainda não foi gerado\n\n` +
+    `• 🕐 A participação mensal ainda não foi gerada\n\n` +
     `Se precisar de ajuda, digite *5* para falar com um atendente ou *menu* para ver todas as opções.`
   );
 }
@@ -824,7 +824,7 @@ function adaptarResultadoI9(dadosI9) {
   if (validos.length > 0) {
     return {
       status: "sucesso",
-      mensagem: dadosI9?.mensagem || "Boleto encontrado no I9",
+      mensagem: dadosI9?.mensagem || "Participação mensal encontrada no I9",
       veiculos: validos,
       mensagemWhatsapp: montarMensagemBoleto(validos[0]),
     };
@@ -834,10 +834,10 @@ function adaptarResultadoI9(dadosI9) {
     status: "erro",
     mensagem:
       dadosI9?.mensagem ||
-      "Cadastro encontrado no I9, mas sem boleto disponível",
+      "Cadastro encontrado no I9, mas sem participação mensal disponível",
     veiculos: [],
     mensagemWhatsapp:
-      "❌ Cadastro encontrado, mas não há boleto disponível no momento.",
+      "❌ Cadastro encontrado, mas não há participação mensal disponível no momento.",
   };
 }
 
@@ -1400,7 +1400,7 @@ async function southSegundaViaBoletos({ placa, documento }) {
     if (!data || !data.UrlBoleto) {
       return {
         status: "erro",
-        mensagem: "Nenhum boleto encontrado na South",
+        mensagem: "Nenhuma participação mensal encontrada na South",
         veiculos: [],
         mensagemWhatsapp: montarMensagemSemResultado(placaFinal || docFinal),
       };
@@ -1435,7 +1435,7 @@ async function southSegundaViaBoletos({ placa, documento }) {
 
     return {
       status: "sucesso",
-      mensagem: "Boleto encontrado na South",
+      mensagem: "Participação mensal encontrada na South",
       veiculos: [veiculo],
       mensagemWhatsapp: montarMensagemBoleto(veiculo),
     };
@@ -1443,10 +1443,10 @@ async function southSegundaViaBoletos({ placa, documento }) {
     console.log("ERRO SOUTH:", erro.response?.data || erro.message);
     return {
       status: "erro",
-      mensagem: "Erro ao consultar boleto na South",
+      mensagem: "Erro ao consultar participação mensal na South",
       veiculos: [],
       mensagemWhatsapp:
-        "❌ Não foi possível consultar o boleto. Tente novamente.",
+        "❌ Não foi possível consultar a participação mensal. Tente novamente.",
     };
   }
 }
@@ -1477,7 +1477,7 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
         mensagem: "Informe ao menos placa, cpf, cnpj ou documento",
         veiculos: [],
         mensagemWhatsapp:
-          "❌ Informe os dados necessários para consultar o boleto.",
+          "❌ Informe os dados necessários para consultar a participação mensal.",
       });
     }
 
@@ -1511,7 +1511,7 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
       return res.status(404).json({
         sistema: "i9",
         status: "erro",
-        mensagem: resultadoI9.mensagem || "Nenhum boleto encontrado no I9",
+        mensagem: resultadoI9.mensagem || "Nenhuma participação mensal encontrada no I9",
         veiculos: [],
         mensagemWhatsapp:
           resultadoI9.mensagemWhatsapp ||
@@ -1586,7 +1586,7 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
       return res.json({ sistema: "south", ...dadosSouth });
     }
 
-    // Verifica se cadastro existe mas boleto já foi pago
+    // Verifica se cadastro existe mas participação mensal já foi paga
     let statusFinal = "nao_encontrado";
     let mensagemFinal = montarMensagemSemResultado(entradaExibicao);
 
@@ -1603,14 +1603,14 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
         `✅ *Sem pendências encontradas!*
 
 ` +
-        `Não há boleto em aberto para *${entradaExibicao}* no momento. O pagamento pode já ter sido processado.
+        `Não há participação mensal em aberto para *${entradaExibicao}* no momento. O pagamento pode já ter sido processado.
 
 ` +
         `Se tiver dúvidas, digite *5* para falar com um atendente.`;
     } else if (statusI9 === "em_atraso") {
       statusFinal = "nao_encontrado";
       mensagemFinal =
-        `⚠️ *Identificamos um boleto em atraso.*
+        `⚠️ *Identificamos uma participação mensal em atraso.*
 
 ` +
         `Como o vencimento passou há mais de 3 dias, será necessária uma *nova vistoria* para regularizar sua proteção.
@@ -1625,7 +1625,7 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
       // Não foi possível confirmar se está pago ou em atraso — orienta a falar com atendente
       statusFinal = "nao_encontrado";
       mensagemFinal =
-        `⚠️ *Não encontramos boleto em aberto para ${entradaExibicao}.*
+        `⚠️ *Não encontramos participação mensal em aberto para ${entradaExibicao}.*
 
 ` +
         `Não foi possível verificar a situação completa no momento. Isso pode indicar:
@@ -1633,7 +1633,7 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
 ` +
         `• Pagamento já realizado e em processamento
 ` +
-        `• Boleto em atraso aguardando regularização
+        `• Participação mensal em atraso aguardando regularização
 
 ` +
         `Por favor, entre em contato com nossa equipe:
@@ -1649,7 +1649,7 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
             `✅ *Sem pendências encontradas!*
 
 ` +
-            `Não há boleto em aberto para *${entradaExibicao}* no momento. Provavelmente o pagamento já foi realizado.
+            `Não há participação mensal em aberto para *${entradaExibicao}* no momento. Provavelmente o pagamento já foi realizado.
 
 ` +
             `Se tiver dúvidas, digite *5* para falar com um atendente.`;
@@ -1666,7 +1666,7 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
 
     return res.status(404).json({
       status: "erro",
-      mensagem: "Nenhum boleto encontrado",
+      mensagem: "Nenhuma participação mensal encontrada",
       veiculos: [],
       mensagemWhatsapp: mensagemFinal,
     });
@@ -1674,7 +1674,7 @@ app.post("/boleto", protegerRotaInterna, async (req, res) => {
     console.error("Erro /boleto:", extrairErro(erro));
     return res.status(500).json({
       status: "erro",
-      mensagem: "Erro ao consultar boleto",
+      mensagem: "Erro ao consultar participação mensal",
       veiculos: [],
       mensagemWhatsapp: "❌ Erro interno. Tente novamente.",
     });

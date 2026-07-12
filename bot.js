@@ -413,11 +413,10 @@ function montarHeadersChatwoot() {
 // =============================================================================
 // CHATWOOT — API
 // =============================================================================
-async function criarOuBuscarContatoChatwoot(telefone, nome = "Cliente") {
+async function criarOuBuscarContatoChatwoot(telefone, nome = "Associado") {
   if (!temChatwootConfigurado()) return null;
 
-  const nomeFinal =
-    nome && nome !== "Associado" && nome !== "Cliente" ? nome : "Cliente";
+  const nomeFinal = nome && nome !== "Associado" ? nome : "Associado";
 
   try {
     const busca = await axios.get(
@@ -435,7 +434,7 @@ async function criarOuBuscarContatoChatwoot(telefone, nome = "Cliente") {
       const contato = contatos[0];
       console.log(`🔍 Contato encontrado no Chatwoot: ${contato.id}`);
 
-      if (nomeFinal && nomeFinal !== "Cliente" && contato.name !== nomeFinal) {
+      if (nomeFinal && nomeFinal !== "Associado" && contato.name !== nomeFinal) {
         try {
           await axios.put(
             `${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/contacts/${contato.id}`,
@@ -744,7 +743,7 @@ async function registrarAcaoClienteChatwoot(from, acao, conversationId = null) {
     let convId = conversationId || obterUltimoCanal(from)?.conversationId;
 
     if (!convId) {
-      convId = await criarConversaChatwoot(from, "Cliente");
+      convId = await criarConversaChatwoot(from, "Associado");
       if (convId) atualizarUltimoCanal(from, { origem: "meta", conversationId: convId });
     }
 
@@ -1211,7 +1210,7 @@ async function processarPagamento(from, bodyText, contexto = {}) {
         `🚗 Encontramos *${comBoleto.length} veículos* associados a esse cadastro.
 
 ` +
-        `Para localizar o boleto correto, por favor informe a *placa do veículo* específico que deseja consultar.`,
+        `Para localizar a participação mensal correta, por favor informe a *placa do veículo* específico que deseja consultar.`,
         contexto,
       );
       estadoUsuario[from] = "pagamento";
@@ -1228,10 +1227,10 @@ async function processarPagamento(from, bodyText, contexto = {}) {
         // Cadastro encontrado mas sem boleto disponível — provável atraso > 3 dias
         await enviarTextoCanal(
           from,
-          `⚠️ *Pagamento não localizado ou boleto indisponível.*
+          `⚠️ *Pagamento não localizado ou participação mensal indisponível.*
 
 ` +
-          `Se o seu vencimento passou há mais de *3 dias*, o sistema exige uma *nova vistoria* do veículo antes de gerar um novo boleto.
+          `Se o seu vencimento passou há mais de *3 dias*, o sistema exige uma *nova vistoria* do veículo antes de gerar uma nova participação mensal.
 
 ` +
           `📱 Para realizar a vistoria, acesse o aplicativo AVSEG:
@@ -1367,7 +1366,7 @@ async function processarImagemComIA(from, message, nomeCliente, contexto = {}) {
     if (categoria === "DOCUMENTO_BOLETO") {
       await enviarTextoCanal(
         from,
-        `Recebi seu documento! 📄 Para consultar ou gerar a 2ª via do boleto:\n\n• Digite *menu* e escolha a opção *2*\n• Ou envie sua *placa* ou *CPF* diretamente\n\n*AVSEG Proteção Veicular*`,
+        `Recebi seu documento! 📄 Para consultar ou gerar a 2ª via da participação mensal:\n\n• Digite *menu* e escolha a opção *2*\n• Ou envie sua *placa* ou *CPF* diretamente\n\n*AVSEG Proteção Veicular*`,
         contexto,
       );
       return;
@@ -1751,7 +1750,7 @@ Responda SEMPRE em JSON com este formato exato:
 
 **QUER_BOLETO_SEM_DADOS** → Associado pede 2ª via, boleto, link de pagamento, como pagar, SEM informar placa ou CPF
 - acao: "PEDIR_DADOS"
-- resposta: Peça a placa ou CPF do associado para buscar o boleto.
+- resposta: Peça a placa ou CPF do associado para buscar a participação mensal.
 
 **QUER_BOLETO_COM_DADOS** → Associado pede boleto E já informa a placa ou CPF na mesma mensagem (ex: "minha placa é ABC1234", "preciso pagar, CPF 123")
 - acao: "BUSCAR_BOLETO"
@@ -1903,7 +1902,7 @@ Responda SEMPRE em JSON com este formato exato:
         try {
           let convId = contexto.conversationId || obterUltimoCanal(from)?.conversationId;
           if (!convId) {
-            convId = await criarConversaChatwoot(from, "Cliente");
+            convId = await criarConversaChatwoot(from, "Associado");
           } else {
             await abrirConversaHumanaChatwoot(convId);
           }
@@ -1911,7 +1910,7 @@ Responda SEMPRE em JSON com este formato exato:
             atualizarUltimoCanal(from, { conversationId: convId });
             await enviarTextoChatwoot(
               convId,
-              `🤖 *IA escalou para humano*\n\nIntenção identificada: *${intencao}*\nMensagem do cliente: "${bodyText || `[${msgType}]`}"\n\n📱 Número: +${from}`,
+              `🤖 *IA escalou para humano*\n\nIntenção identificada: *${intencao}*\nMensagem do associado: "${bodyText || `[${msgType}]`}"\n\n📱 Número: +${from}`,
               true,
             );
           }
