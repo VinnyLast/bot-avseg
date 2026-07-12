@@ -449,6 +449,7 @@ app.post("/webhook", async (req, res) => {
     msgType,
     message,
     value,
+    midiaDashboard,
     nomeCliente: value?.contacts?.[0]?.profile?.name || "Cliente",
   });
 });
@@ -605,6 +606,61 @@ async function processarWebhookChatwoot(body) {
     console.error("❌ Erro no webhook Chatwoot:", erro.response?.data || erro.message);
   }
 }
+
+// =============================================================================
+// CHAT-AVSEG — recebe ações do atendente (substituto do Chatwoot)
+// =============================================================================
+app.post("/enviar-mensagem", protegerRotaInterna, async (req, res) => {
+  res.status(200).json({ ok: true });
+
+  const { telefone, texto, tipo, arquivoUrl, mimeType, nomeArquivo } = req.body || {};
+  const numero = normalizarTelefoneBR(telefone);
+  if (!numero) {
+    console.warn("⚠️ /enviar-mensagem recebido sem telefone válido");
+    return;
+  }
+
+  try {
+    if (arquivoUrl && (tipo === "imagem" || String(mimeType || "").startsWith("image/"))) {
+      await enviarImagem(numero, arquivoUrl, texto || "");
+    } else if (arquivoUrl) {
+      await enviarDocumento(numero, arquivoUrl, nomeArquivo || "arquivo", texto || "");
+    } else if (texto && String(texto).trim()) {
+      await enviarTexto(numero, texto);
+    }
+
+    registrarLogConversa({
+      telefone: numero,
+      nome: "Atendente",
+      origem: "atendente",
+      tipo: tipo || "text",
+      mensagem: texto || nomeArquivo || "",
+      mediaUrl: arquivoUrl || null,
+      mimeType: mimeType || null,
+      filename: nomeArquivo || null,
+    });
+
+    // Ativa modo humano automaticamente (mesmo comportamento do Chatwoot)
+    app.emit("ativar_modo_humano", { telefone: numero });
+    console.log(`✅ Mensagem do atendente (chat-avseg) enviada para WhatsApp: ${numero}`);
+  } catch (erro) {
+    console.error("❌ Erro ao enviar mensagem do chat-avseg para WhatsApp:", erro.response?.data || erro.message);
+  }
+});
+
+app.post("/chat/finalizar", protegerRotaInterna, (req, res) => {
+  res.status(200).json({ ok: true });
+
+  const { telefone } = req.body || {};
+  const numero = normalizarTelefoneBR(telefone);
+  if (!numero) {
+    console.warn("⚠️ /chat/finalizar recebido sem telefone válido");
+    return;
+  }
+
+  app.emit("liberar_modo_humano", { telefone: numero });
+  console.log(`✅ Conversa finalizada no chat-avseg, modo humano liberado: ${numero}`);
+});
 
 // =============================================================================
 // ENVIO DE MENSAGENS

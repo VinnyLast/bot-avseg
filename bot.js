@@ -73,6 +73,19 @@ const CHATWOOT_API_TOKEN = process.env.CHATWOOT_API_TOKEN || "";
 const CHATWOOT_ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID || "";
 const CHATWOOT_INBOX_ID = process.env.CHATWOOT_INBOX_ID || "";
 
+// Chat AVSEG (substituto do Chatwoot)
+const CHAT_AVSEG_ENABLED = process.env.CHAT_AVSEG_ENABLED === "true";
+const CHAT_AVSEG_URL = String(process.env.CHAT_AVSEG_URL || "").replace(
+  /\/+$/,
+  "",
+);
+// Usa a mesma INTERNAL_API_KEY já validada acima — precisa ser idêntica ao
+// INTERNAL_API_KEY do backend/.env do chat-avseg.
+const BOT_PUBLIC_URL = String(process.env.BOT_PUBLIC_URL || "").replace(
+  /\/+$/,
+  "",
+);
+
 // Links
 const LINK_COTACAO = process.env.LINK_COTACAO || "";
 const LINK_VISTORIA = process.env.LINK_VISTORIA || "";
@@ -667,6 +680,59 @@ async function espelharMensagemNoChatwoot({ from, bodyText, msgType = "text", me
     return novoConvId;
   } catch (erro) {
     console.error("❌ Erro ao criar nova conversa no Chatwoot:", erro.response?.data || erro.message);
+    return null;
+  }
+}
+
+function temChatAvsegConfigurado() {
+  return Boolean(CHAT_AVSEG_ENABLED && CHAT_AVSEG_URL && INTERNAL_API_KEY);
+}
+
+const TIPO_CHAT_AVSEG_POR_MSGTYPE = {
+  text: "texto",
+  interactive: "texto",
+  image: "imagem",
+  audio: "audio",
+  video: "video",
+  document: "arquivo",
+};
+
+async function enviarMensagemParaChatAvseg({ from, bodyText, msgType = "text", nomeCliente = "Cliente", midiaDashboard = null }) {
+  if (!temChatAvsegConfigurado()) return null;
+
+  const payload = {
+    telefone: from,
+    mensagem: bodyText || midiaDashboard?.legenda || "",
+    nomeCliente: nomeCliente || "Cliente",
+    tipo: TIPO_CHAT_AVSEG_POR_MSGTYPE[msgType] || "texto",
+  };
+
+  if (midiaDashboard?.mediaUrl) {
+    if (BOT_PUBLIC_URL) {
+      payload.arquivoUrl = `${BOT_PUBLIC_URL}${midiaDashboard.mediaUrl}`;
+    } else {
+      console.warn("⚠️ BOT_PUBLIC_URL não configurado — anexo não será encaminhado ao chat-avseg");
+    }
+    payload.mimeType = midiaDashboard.mimeType;
+    payload.nomeArquivo = midiaDashboard.filename;
+  }
+
+  try {
+    const resposta = await axios.post(
+      `${CHAT_AVSEG_URL}/api/webhook/whatsapp`,
+      payload,
+      {
+        headers: {
+          "x-api-key": INTERNAL_API_KEY,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      },
+    );
+    console.log(`✅ Mensagem encaminhada ao chat-avseg: ${from} (conversaId=${resposta.data?.conversaId || "?"})`);
+    return resposta.data?.conversaId || null;
+  } catch (erro) {
+    console.error("❌ Erro ao encaminhar mensagem para chat-avseg:", erro.response?.data || erro.message);
     return null;
   }
 }
@@ -1345,7 +1411,7 @@ async function processarImagemComIA(from, message, nomeCliente, contexto = {}) {
 // =============================================================================
 // PROCESSAMENTO CENTRAL DE MENSAGENS
 // =============================================================================
-async function processarMensagem({ from, bodyText, origem = "meta", conversationId = null, msgType = "text", message = null, nomeCliente = "Cliente" }) {
+async function processarMensagem({ from, bodyText, origem = "meta", conversationId = null, msgType = "text", message = null, nomeCliente = "Cliente", midiaDashboard = null }) {
 
   const texto = String(bodyText || "").toLowerCase().trim();
   const http = axiosInterno();
@@ -1368,6 +1434,11 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
         contexto.conversationId = null;
       }
     }
+  }
+
+  // Espelha mensagem no chat-avseg (substituto do Chatwoot)
+  if (origem === "meta" && temChatAvsegConfigurado()) {
+    await enviarMensagemParaChatAvseg({ from, bodyText, msgType, nomeCliente, midiaDashboard });
   }
 
   // 0. Modo humano
@@ -1873,9 +1944,9 @@ async function fallbackSimples(from, contexto = {}) {
 // =============================================================================
 // EVENTOS — META
 // =============================================================================
-app.on("wa_message", async ({ from, bodyText, msgType, message, nomeCliente }) => {
+app.on("wa_message", async ({ from, bodyText, msgType, message, nomeCliente, midiaDashboard }) => {
   ultimaMensagemRecebida = Date.now(); // Atualiza watchdog
-  await processarMensagem({ from, bodyText, origem: "meta", msgType, message, nomeCliente });
+  await processarMensagem({ from, bodyText, origem: "meta", msgType, message, nomeCliente, midiaDashboard });
 });
 
 // =============================================================================
@@ -2066,7 +2137,7 @@ app.get("/canais", protegerRotaInterna, (req, res) => {
   res.json({ total: Object.keys(ultimoCanalPorNumero).length, canais: ultimoCanalPorNumero });
 });
 
-console.log(`🤖 Bot iniciado. TEST_MODE=${TEST_MODE ? "ON" : "OFF"} | CHATWOOT=${temChatwootConfigurado() ? "ON" : "OFF"}`);
+console.log(`🤖 Bot iniciado. TEST_MODE=${TEST_MODE ? "ON" : "OFF"} | CHATWOOT=${temChatwootConfigurado() ? "ON" : "OFF"} | CHAT_AVSEG=${temChatAvsegConfigurado() ? "ON" : "OFF"}`);
 
 // =============================================================================
 // WATCHDOG — reinicia automaticamente se ficar sem receber mensagens por 30min
