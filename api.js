@@ -745,6 +745,41 @@ async function enviarDocumento(to, docUrl, fileName = "arquivo.pdf", caption = "
   }
 }
 
+// Mensagem com botão de resposta rápida (reply button) — usado quando o bot
+// quer oferecer "Falar com atendente" de forma clicável, em vez de pedir pro
+// associado digitar um número.
+async function enviarBotaoFalarAtendente(to, texto) {
+  try {
+    const response = await axios.post(
+      `https://graph.facebook.com/v25.0/${WA_PHONE_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "interactive",
+        interactive: {
+          type: "button",
+          body: { text: texto },
+          action: {
+            buttons: [
+              { type: "reply", reply: { id: "5", title: "Falar com atendente" } },
+            ],
+          },
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${WA_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      },
+    );
+    console.log(`✅ BOTÃO ENVIADO para ${to}:`, response.data);
+  } catch (erro) {
+    console.error(`❌ ERRO META (botão):`, erro.response?.data || erro.message);
+  }
+}
+
 // =============================================================================
 // MENSAGENS
 // =============================================================================
@@ -774,7 +809,7 @@ function montarMensagemSemResultado(entrada) {
     `• ✅ O pagamento já foi realizado\n` +
     `• 📋 Os dados informados são de outro titular\n` +
     `• 🕐 A participação mensal ainda não foi gerada\n\n` +
-    `Se precisar de ajuda, digite *5* para falar com um atendente ou *menu* para ver todas as opções.`
+    `Recomendo que tire suas dúvidas com um atendente. Se preferir, digite *menu* para ver todas as opções.`
   );
 }
 
@@ -2105,6 +2140,7 @@ module.exports = {
   app,
   enviarTexto,
   enviarImagem,
+  enviarBotaoFalarAtendente,
   enviarTemplate,
   enviarListaMenu,
   gerarLinkCurto,

@@ -18,6 +18,7 @@ const {
   app,
   enviarTexto,
   enviarImagem,
+  enviarBotaoFalarAtendente,
   enviarTemplate,
   enviarListaMenu,
   gerarLinkCurto,
@@ -765,6 +766,29 @@ async function sinalizarSolicitouHumanoChatAvseg(from) {
   }
 }
 
+// Espelha uma resposta automática do próprio bot no chat-avseg, como nota
+// interna (origemMsg:"bot") — dá ao atendente o mesmo contexto que já existe
+// no Chatwoot (nota privada), sem isso parecer que o associado escreveu.
+async function espelharRespostaBotNoChatAvseg(from, texto) {
+  if (!temChatAvsegConfigurado() || !texto) return;
+
+  try {
+    await axios.post(
+      `${CHAT_AVSEG_URL}/api/webhook/whatsapp`,
+      { telefone: from, mensagem: texto, origemMsg: "bot" },
+      {
+        headers: {
+          "x-api-key": INTERNAL_API_KEY,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      },
+    );
+  } catch (erro) {
+    console.error("❌ Erro ao espelhar resposta do bot no chat-avseg:", erro.response?.data || erro.message);
+  }
+}
+
 async function registrarAcaoClienteChatwoot(from, acao, conversationId = null) {
   if (!temChatwootConfigurado()) return;
 
@@ -821,7 +845,7 @@ async function marcarConversaResolvidaChatwoot(conversationId) {
 // =============================================================================
 // CAMADA DE RESPOSTA POR CANAL
 // =============================================================================
-async function enviarTextoCanal(from, texto, contexto = {}) {
+async function enviarTextoCanal(from, texto, contexto = {}, opcoes = {}) {
   const numero = normalizarTelefoneBR(from);
   if (!numero) return;
   if (!podeEnviar(numero)) {
@@ -836,14 +860,21 @@ async function enviarTextoCanal(from, texto, contexto = {}) {
       const conversationId = contexto.conversationId || obterUltimoCanal(numero)?.conversationId;
       if (!conversationId) {
         await enviarTexto(numero, texto);
+        if (temChatAvsegConfigurado()) espelharRespostaBotNoChatAvseg(numero, texto);
         return;
       }
       await enviarTextoChatwoot(conversationId, texto);
+      if (temChatAvsegConfigurado()) espelharRespostaBotNoChatAvseg(numero, texto);
       return;
     }
 
-    // Envia pelo WhatsApp normalmente
-    await enviarTexto(numero, texto);
+    // Envia pelo WhatsApp normalmente — com botão "Falar com atendente" quando pedido
+    // (só faz sentido no envio direto: a API do Chatwoot não carrega botão interativo)
+    if (opcoes.comBotaoAtendente) {
+      await enviarBotaoFalarAtendente(numero, texto);
+    } else {
+      await enviarTexto(numero, texto);
+    }
     console.log(`✅ Texto enviado para ${numero}`);
 
     // Registra no log
@@ -854,6 +885,8 @@ async function enviarTextoCanal(from, texto, contexto = {}) {
       tipo: "text",
       mensagem: texto,
     });
+
+    if (temChatAvsegConfigurado()) espelharRespostaBotNoChatAvseg(numero, texto);
 
     // Espelha no Chatwoot como nota privada (não gera evento outgoing, evita duplicata)
     if (temChatwootConfigurado()) {
@@ -980,6 +1013,9 @@ async function enviarMenu(numero, cliente, contexto = {}) {
         await enviarTextoChatwoot(convId, `🤖 Bot: Menu principal enviado ao associado`, true);
       } catch (_) {}
     }
+  }
+  if (resultado && temChatAvsegConfigurado()) {
+    espelharRespostaBotNoChatAvseg(numero, "Menu principal enviado ao associado");
   }
 
   // Fallback para texto se lista falhar
@@ -1215,7 +1251,7 @@ async function processarPagamento(from, bodyText, contexto = {}) {
     }
 
     if (dados?.status === "erro" && dados?.mensagemWhatsapp) {
-      await enviarTextoCanal(from, dados.mensagemWhatsapp, contexto);
+      await enviarTextoCanal(from, dados.mensagemWhatsapp, contexto, { comBotaoAtendente: true });
       await delay(500);
       await enviarTextoCanal(from, "Digite *menu* para voltar ao início.", contexto);
       estadoUsuario[from] = null;
