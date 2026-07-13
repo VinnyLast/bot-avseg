@@ -11,64 +11,170 @@
 <body>
   <main class="container">
     <header class="topbar">
-      <div>
-        <h1>Dashboard AVSEG Bot</h1>
-        <p>Painel operacional do atendimento e notificações</p>
+      <div class="topbar-brand">
+        <div class="topbar-logo">AV</div>
+        <div>
+          <h1>Dashboard AVSEG Bot</h1>
+          <p id="ultimaAtualizacao">Painel operacional do atendimento e notificações</p>
+        </div>
       </div>
-      <div class="topbar-info">
-        <span class="status-dot"></span>
-        <span>Atualização automática a cada 10 segundos</span>
+      <div class="topbar-status" id="topbarStatus">
+        <span class="status-pill"><span class="status-dot"></span> Carregando status...</span>
       </div>
     </header>
 
     <nav class="tabs">
       <button class="tab-btn active" data-tab="resumo">Resumo</button>
+      <button class="tab-btn" data-tab="operacao">Operação</button>
       <button class="tab-btn" data-tab="consultas">Consultas</button>
       <button class="tab-btn" data-tab="notificacoes">Notificações</button>
-      <button class="tab-btn" data-tab="chat">Mini Chat</button>
       <button class="tab-btn" data-tab="avaliacoes">Avaliações</button>
+      <button class="tab-btn" data-tab="chat">Mini Chat</button>
     </nav>
 
+    <!-- ============================================================= RESUMO -->
     <div class="tab-content active" id="tab-resumo">
       <section class="cards">
-        <div class="card"><span>Consultas hoje</span><strong id="consultasHoje">0</strong></div>
-        <div class="card"><span>Participações mensais encontradas</span><strong id="boletosHoje">0</strong></div>
-        <div class="card"><span>Notificações hoje</span><strong id="notificacoesHoje">0</strong></div>
-        <div class="card"><span>Opt-outs</span><strong id="optoutTotal">0</strong></div>
-        <div class="card"><span>Envios registrados</span><strong id="enviosRegistrados">0</strong></div>
-        <div class="card"><span>Avaliações hoje</span><strong id="avaliacoesHoje">0</strong></div>
-        <div class="card"><span>Média geral</span><strong id="mediaAvaliacoes">0.0</strong></div>
-        <div class="card"><span>Aniversários na data</span><strong id="aniversariosDia">0</strong></div>
-        <div class="card"><span>Lembrete 5 dias</span><strong id="lembrete5Dia">0</strong></div>
-        <div class="card"><span>Lembrete 2 dias</span><strong id="lembrete2Dia">0</strong></div>
-        <div class="card"><span>Cobrança 3 dias</span><strong id="cobranca3Dia">0</strong></div>
-        <div class="card"><span>Cobrança 4 dias</span><strong id="cobranca4Dia">0</strong></div>
-        <div class="card"><span>Cobrança 15 dias</span><strong id="cobranca15Dia">0</strong></div>
-      </section>
-
-      <section class="filtros-dashboard">
-        <label for="filtroData">Filtrar por data:</label>
-        <input type="date" id="filtroData" />
-        <button id="btnAplicarData">Aplicar</button>
+        <div class="card">
+          <div class="card-top">
+            <span class="card-icon">🔍</span>
+          </div>
+          <span class="card-label">Consultas hoje</span>
+          <strong id="consultasHoje">0</strong>
+          <div class="card-delta flat" id="deltaConsultas"></div>
+        </div>
+        <div class="card">
+          <div class="card-top"><span class="card-icon">💳</span></div>
+          <span class="card-label">Participações mensais encontradas</span>
+          <strong id="boletosHoje">0</strong>
+          <div class="card-delta flat" id="deltaBoletos"></div>
+        </div>
+        <div class="card">
+          <div class="card-top"><span class="card-icon">📨</span></div>
+          <span class="card-label">Notificações hoje</span>
+          <strong id="notificacoesHoje">0</strong>
+          <div class="card-delta flat" id="deltaNotificacoes"></div>
+        </div>
+        <div class="card">
+          <div class="card-top"><span class="card-icon">🙋</span></div>
+          <span class="card-label">Em atendimento humano agora</span>
+          <strong id="modoHumanoAgora">0</strong>
+        </div>
+        <div class="card">
+          <div class="card-top"><span class="card-icon">⭐</span></div>
+          <span class="card-label">Avaliação média (geral)</span>
+          <strong id="mediaAvaliacoes">0.0</strong>
+        </div>
+        <div class="card">
+          <div class="card-top"><span class="card-icon">📝</span></div>
+          <span class="card-label">Avaliações hoje</span>
+          <strong id="avaliacoesHoje">0</strong>
+        </div>
+        <div class="card">
+          <div class="card-top"><span class="card-icon">🚫</span></div>
+          <span class="card-label">Opt-outs (total)</span>
+          <strong id="optoutTotal">0</strong>
+        </div>
+        <div class="card">
+          <div class="card-top"><span class="card-icon">📋</span></div>
+          <span class="card-label">Envios de template registrados</span>
+          <strong id="enviosRegistrados">0</strong>
+        </div>
       </section>
 
       <section class="grid">
         <div class="panel">
-          <div class="panel-header"><h2>Notificações por tipo</h2></div>
-          <div class="chart-wrap"><canvas id="graficoNotificacoes"></canvas></div>
+          <div class="panel-header">
+            <div>
+              <h2>Consultas — últimos 7 dias</h2>
+              <p class="panel-sub">Total de consultas realizadas por dia</p>
+            </div>
+          </div>
+          <div class="chart-wrap"><canvas id="graficoTendenciaConsultas"></canvas></div>
         </div>
         <div class="panel">
           <div class="panel-header"><h2>Resumo rápido</h2></div>
           <div class="quick-list">
             <div class="quick-item"><span>Total de consultas carregadas</span><strong id="totalConsultas">0</strong></div>
-            <div class="quick-item"><span>Total de notificações carregadas</span><strong id="totalNotificacoes">0</strong></div>
             <div class="quick-item"><span>Consultas I9</span><strong id="consultasI9">0</strong></div>
             <div class="quick-item"><span>Consultas South</span><strong id="consultasSouth">0</strong></div>
+            <div class="quick-item"><span>Total de notificações carregadas</span><strong id="totalNotificacoes">0</strong></div>
           </div>
+        </div>
+      </section>
+
+      <section class="filtros-dashboard">
+        <label for="filtroData">Filtrar detalhamento de notificações por data:</label>
+        <input type="date" id="filtroData" />
+        <button id="btnAplicarData">Aplicar</button>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Notificações por tipo (no dia filtrado)</h2>
+            <p class="panel-sub">Aniversário, lembretes e cobranças enviados</p>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="graficoNotificacoes"></canvas></div>
+      </section>
+    </div>
+
+    <!-- ============================================================= OPERAÇÃO -->
+    <div class="tab-content" id="tab-operacao">
+      <section class="op-grid">
+        <div class="op-card">
+          <span class="status-dot"></span>
+          <div class="op-card-text"><span>Integração Chatwoot</span><strong id="opChatwoot">—</strong></div>
+        </div>
+        <div class="op-card">
+          <span class="status-dot"></span>
+          <div class="op-card-text"><span>Integração chat-avseg</span><strong id="opChatAvseg">—</strong></div>
+        </div>
+        <div class="op-card">
+          <span class="status-dot"></span>
+          <div class="op-card-text"><span>Modo de teste (TEST_MODE)</span><strong id="opTestMode">—</strong></div>
+        </div>
+      </section>
+
+      <section class="grid-2">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>Em atendimento humano agora</h2>
+              <p class="panel-sub">Números com o bot pausado, aguardando atendente</p>
+            </div>
+          </div>
+          <div id="listaModoHumano"><div class="empty-state">Carregando...</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>Canais ativos por número</h2>
+              <p class="panel-sub">Última origem de conversa registrada (Meta / Chatwoot)</p>
+            </div>
+          </div>
+          <div id="listaCanais"><div class="empty-state">Carregando...</div></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Associados que optaram por não receber mensagens</h2>
+            <p class="panel-sub">Opt-out de notificações automáticas (aniversário, cobrança, lembrete)</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Telefone</th></tr></thead>
+            <tbody id="optoutTabela"></tbody>
+          </table>
         </div>
       </section>
     </div>
 
+    <!-- ============================================================= CONSULTAS -->
     <div class="tab-content" id="tab-consultas">
       <section class="panel">
         <div class="panel-header"><h2>Últimas consultas</h2></div>
@@ -85,6 +191,7 @@
       </section>
     </div>
 
+    <!-- ============================================================= NOTIFICAÇÕES -->
     <div class="tab-content" id="tab-notificacoes">
       <section class="panel">
         <div class="panel-header"><h2>Últimas notificações</h2></div>
@@ -101,6 +208,32 @@
       </section>
     </div>
 
+    <!-- ============================================================= AVALIAÇÕES -->
+    <div class="tab-content" id="tab-avaliacoes">
+      <section class="grid-2">
+        <div class="panel">
+          <div class="panel-header"><h2>Distribuição de notas</h2></div>
+          <div class="chart-wrap"><canvas id="graficoAvaliacoes"></canvas></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><h2>Média — últimos 7 dias</h2></div>
+          <div class="chart-wrap"><canvas id="graficoTendenciaAvaliacoes"></canvas></div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-header"><h2>Últimas avaliações</h2></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Data</th><th>Telefone</th><th>Nota</th><th>Origem</th></tr>
+            </thead>
+            <tbody id="avaliacoesTabela"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ============================================================= MINI CHAT -->
     <div class="tab-content" id="tab-chat">
       <section class="panel">
         <div class="panel-header">
@@ -112,29 +245,14 @@
           </div>
         </div>
         <div class="mini-chat">
-          <aside class="chat-list" id="chatLista"></aside>
+          <aside class="chat-list">
+            <div class="chat-search"><input type="text" id="buscaConversa" placeholder="Buscar por nome ou telefone..." /></div>
+            <div id="chatLista"></div>
+          </aside>
           <div class="chat-window">
             <div class="chat-header" id="chatHeader">Selecione um associado</div>
             <div class="chat-messages" id="chatMensagens"></div>
           </div>
-        </div>
-      </section>
-    </div>
-
-    <div class="tab-content" id="tab-avaliacoes">
-      <section class="panel">
-        <div class="panel-header"><h2>Avaliações de atendimento</h2></div>
-        <div class="chart-wrap"><canvas id="graficoAvaliacoes"></canvas></div>
-      </section>
-      <section class="panel">
-        <div class="panel-header"><h2>Últimas avaliações</h2></div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Data</th><th>Telefone</th><th>Nota</th><th>Origem</th></tr>
-            </thead>
-            <tbody id="avaliacoesTabela"></tbody>
-          </table>
         </div>
       </section>
     </div>

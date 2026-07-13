@@ -2169,6 +2169,17 @@ app.get("/canais", protegerRotaInterna, (req, res) => {
   res.json({ total: Object.keys(ultimoCanalPorNumero).length, canais: ultimoCanalPorNumero });
 });
 
+app.get("/dashboard/status", protegerRotaInterna, (req, res) => {
+  res.json({
+    testMode: TEST_MODE,
+    enableCron: ENABLE_CRON,
+    chatwootAtivo: temChatwootConfigurado(),
+    chatAvsegAtivo: temChatAvsegConfigurado(),
+    modoHumanoTotal: modoHumano.size,
+    uptimeSegundos: Math.floor(process.uptime()),
+  });
+});
+
 console.log(`🤖 Bot iniciado. TEST_MODE=${TEST_MODE ? "ON" : "OFF"} | CHATWOOT=${temChatwootConfigurado() ? "ON" : "OFF"} | CHAT_AVSEG=${temChatAvsegConfigurado() ? "ON" : "OFF"}`);
 
 // =============================================================================

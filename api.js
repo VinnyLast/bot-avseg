@@ -1914,7 +1914,7 @@ app.get("/dashboard/resumo", protegerRotaInterna, (req, res) => {
 });
 
 app.get("/dashboard/consultas", protegerRotaInterna, (req, res) => {
-  res.json(carregarJson(ARQUIVO_LOG_CONSULTAS, []).slice(0, 100));
+  res.json(carregarJson(ARQUIVO_LOG_CONSULTAS, []).slice(0, 1000));
 });
 
 app.get("/dashboard/notificacoes", protegerRotaInterna, (req, res) => {
@@ -1926,7 +1926,7 @@ app.get("/dashboard/optout", protegerRotaInterna, (req, res) => {
 });
 
 app.get("/dashboard/avaliacoes", protegerRotaInterna, (req, res) => {
-  res.json(carregarJson(ARQUIVO_LOG_AVALIACOES, []).slice(0, 100));
+  res.json(carregarJson(ARQUIVO_LOG_AVALIACOES, []).slice(0, 500));
 });
 
 app.get("/dashboard/conversas", protegerRotaInterna, (req, res) => {
