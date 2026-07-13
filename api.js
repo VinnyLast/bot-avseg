@@ -648,14 +648,22 @@ app.post("/enviar-mensagem", protegerRotaInterna, async (req, res) => {
   }
 });
 
-app.post("/chat/finalizar", protegerRotaInterna, (req, res) => {
+app.post("/chat/finalizar", protegerRotaInterna, async (req, res) => {
   res.status(200).json({ ok: true });
 
-  const { telefone } = req.body || {};
+  const { telefone, mensagem } = req.body || {};
   const numero = normalizarTelefoneBR(telefone);
   if (!numero) {
     console.warn("⚠️ /chat/finalizar recebido sem telefone válido");
     return;
+  }
+
+  if (mensagem && String(mensagem).trim()) {
+    try {
+      await enviarTexto(numero, mensagem);
+    } catch (erro) {
+      console.error("❌ Erro ao enviar mensagem de finalização para WhatsApp:", erro.response?.data || erro.message);
+    }
   }
 
   app.emit("liberar_modo_humano", { telefone: numero });

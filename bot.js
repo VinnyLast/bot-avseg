@@ -702,7 +702,7 @@ async function enviarMensagemParaChatAvseg({ from, bodyText, msgType = "text", n
   const payload = {
     telefone: from,
     mensagem: bodyText || midiaDashboard?.legenda || "",
-    nomeCliente: nomeCliente || "Cliente",
+    nomeCliente: nomeCliente || "Associado",
     tipo: TIPO_CHAT_AVSEG_POR_MSGTYPE[msgType] || "texto",
   };
 
@@ -714,6 +714,12 @@ async function enviarMensagemParaChatAvseg({ from, bodyText, msgType = "text", n
     }
     payload.mimeType = midiaDashboard.mimeType;
     payload.nomeArquivo = midiaDashboard.filename;
+  }
+
+  // Sem texto e sem anexo encaminhável (reaction, sticker, mídia sem BOT_PUBLIC_URL etc.)
+  // — o chat-avseg rejeita mensagem vazia, então manda um placeholder pra não sumir.
+  if (!payload.mensagem && !payload.arquivoUrl) {
+    payload.mensagem = `[${msgType || "mensagem"} recebida]`;
   }
 
   try {
@@ -733,6 +739,29 @@ async function enviarMensagemParaChatAvseg({ from, bodyText, msgType = "text", n
   } catch (erro) {
     console.error("❌ Erro ao encaminhar mensagem para chat-avseg:", erro.response?.data || erro.message);
     return null;
+  }
+}
+
+// Sinaliza que o associado quer falar com humano sem duplicar a mensagem já
+// encaminhada — usado quando a IA/menu identifica o pedido depois do espelhamento
+// inicial da mensagem (ex: escalonamento por IA em linguagem natural).
+async function sinalizarSolicitouHumanoChatAvseg(from) {
+  if (!temChatAvsegConfigurado()) return;
+
+  try {
+    await axios.post(
+      `${CHAT_AVSEG_URL}/api/webhook/whatsapp`,
+      { telefone: from, solicitouHumano: true },
+      {
+        headers: {
+          "x-api-key": INTERNAL_API_KEY,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      },
+    );
+  } catch (erro) {
+    console.error("❌ Erro ao sinalizar solicitação de humano ao chat-avseg:", erro.response?.data || erro.message);
   }
 }
 
@@ -1351,6 +1380,7 @@ async function processarImagemComIA(from, message, nomeCliente, contexto = {}) {
       );
       modoHumano.add(from);
       estadoUsuario[from] = null;
+      if (temChatAvsegConfigurado()) sinalizarSolicitouHumanoChatAvseg(from);
       if (temChatwootConfigurado()) {
         let convId = contexto.conversationId || obterUltimoCanal(from)?.conversationId;
         if (!convId) convId = await criarConversaChatwoot(from, nomeCliente || "Associado");
@@ -1558,6 +1588,7 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
     estadoUsuario[from] = null;
     await enviarTextoCanal(from, `👨‍💻 *Atendimento Humano*\n\nVocê será atendido por um de nossos especialistas em instantes. ✅\n\nSe quiser voltar ao menu automático, basta digitar *menu*.`, contexto);
 
+    if (temChatAvsegConfigurado()) sinalizarSolicitouHumanoChatAvseg(from);
     if (temChatwootConfigurado()) {
       try {
         let convId = conversationId || obterUltimoCanal(from)?.conversationId;
@@ -1641,6 +1672,7 @@ Assim que retornarmos, seu envio será verificado. ✅
     // Escala para humano automaticamente
     modoHumano.add(from);
     estadoUsuario[from] = null;
+    if (temChatAvsegConfigurado()) sinalizarSolicitouHumanoChatAvseg(from);
     if (temChatwootConfigurado()) {
       try {
         // Garante que existe uma conversa — cria se não existir
@@ -1896,6 +1928,7 @@ Responda SEMPRE em JSON com este formato exato:
 
       modoHumano.add(from);
       estadoUsuario[from] = null;
+      if (temChatAvsegConfigurado()) sinalizarSolicitouHumanoChatAvseg(from);
 
       // Abre conversa no Chatwoot
       if (temChatwootConfigurado()) {
