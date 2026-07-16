@@ -697,7 +697,7 @@ const TIPO_CHAT_AVSEG_POR_MSGTYPE = {
   document: "arquivo",
 };
 
-async function enviarMensagemParaChatAvseg({ from, bodyText, msgType = "text", nomeCliente = "Cliente", midiaDashboard = null }) {
+async function enviarMensagemParaChatAvseg({ from, bodyText, msgType = "text", nomeCliente = "Cliente", midiaDashboard = null, message = null }) {
   if (!temChatAvsegConfigurado()) return null;
 
   const payload = {
@@ -705,6 +705,8 @@ async function enviarMensagemParaChatAvseg({ from, bodyText, msgType = "text", n
     mensagem: bodyText || midiaDashboard?.legenda || "",
     nomeCliente: nomeCliente || "Associado",
     tipo: TIPO_CHAT_AVSEG_POR_MSGTYPE[msgType] || "texto",
+    whatsappMessageId: message?.id || undefined,
+    respondendoAoWhatsappId: message?.context?.id || undefined,
   };
 
   if (midiaDashboard?.mediaUrl) {
@@ -1503,7 +1505,7 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
 
   // Espelha mensagem no chat-avseg (substituto do Chatwoot)
   if (origem === "meta" && temChatAvsegConfigurado()) {
-    await enviarMensagemParaChatAvseg({ from, bodyText, msgType, nomeCliente, midiaDashboard });
+    await enviarMensagemParaChatAvseg({ from, bodyText, msgType, nomeCliente, midiaDashboard, message });
   }
 
   // 0. Modo humano

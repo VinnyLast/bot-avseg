@@ -611,22 +611,21 @@ async function processarWebhookChatwoot(body) {
 // CHAT-AVSEG — recebe ações do atendente (substituto do Chatwoot)
 // =============================================================================
 app.post("/enviar-mensagem", protegerRotaInterna, async (req, res) => {
-  res.status(200).json({ ok: true });
-
-  const { telefone, texto, tipo, arquivoUrl, mimeType, nomeArquivo } = req.body || {};
+  const { telefone, texto, tipo, arquivoUrl, mimeType, nomeArquivo, responderAoWhatsappId } = req.body || {};
   const numero = normalizarTelefoneBR(telefone);
   if (!numero) {
     console.warn("⚠️ /enviar-mensagem recebido sem telefone válido");
-    return;
+    return res.status(400).json({ ok: false, erro: "telefone inválido" });
   }
 
   try {
+    let whatsappMessageId = null;
     if (arquivoUrl && (tipo === "imagem" || String(mimeType || "").startsWith("image/"))) {
-      await enviarImagem(numero, arquivoUrl, texto || "");
+      whatsappMessageId = await enviarImagem(numero, arquivoUrl, texto || "", responderAoWhatsappId);
     } else if (arquivoUrl) {
-      await enviarDocumento(numero, arquivoUrl, nomeArquivo || "arquivo", texto || "");
+      whatsappMessageId = await enviarDocumento(numero, arquivoUrl, nomeArquivo || "arquivo", texto || "", responderAoWhatsappId);
     } else if (texto && String(texto).trim()) {
-      await enviarTexto(numero, texto);
+      whatsappMessageId = await enviarTexto(numero, texto, responderAoWhatsappId);
     }
 
     registrarLogConversa({
@@ -643,8 +642,10 @@ app.post("/enviar-mensagem", protegerRotaInterna, async (req, res) => {
     // Ativa modo humano automaticamente (mesmo comportamento do Chatwoot)
     app.emit("ativar_modo_humano", { telefone: numero });
     console.log(`✅ Mensagem do atendente (chat-avseg) enviada para WhatsApp: ${numero}`);
+    res.status(200).json({ ok: true, whatsappMessageId });
   } catch (erro) {
     console.error("❌ Erro ao enviar mensagem do chat-avseg para WhatsApp:", erro.response?.data || erro.message);
+    res.status(200).json({ ok: false });
   }
 });
 
@@ -673,7 +674,10 @@ app.post("/chat/finalizar", protegerRotaInterna, async (req, res) => {
 // =============================================================================
 // ENVIO DE MENSAGENS
 // =============================================================================
-async function enviarTexto(to, texto) {
+// contextMessageId (opcional): wamid da mensagem sendo respondida — faz o
+// WhatsApp mostrar essa mensagem como resposta citada de verdade, igual o
+// app nativo. Retorna o wamid da mensagem recém-enviada (ou null se falhar).
+async function enviarTexto(to, texto, contextMessageId = null) {
   try {
     const response = await axios.post(
       `https://graph.facebook.com/v25.0/${WA_PHONE_ID}/messages`,
@@ -682,6 +686,7 @@ async function enviarTexto(to, texto) {
         to,
         type: "text",
         text: { body: texto },
+        ...(contextMessageId ? { context: { message_id: contextMessageId } } : {}),
       },
       {
         headers: {
@@ -692,12 +697,14 @@ async function enviarTexto(to, texto) {
       },
     );
     console.log(`✅ TEXTO ENVIADO para ${to}:`, response.data);
+    return response.data?.messages?.[0]?.id || null;
   } catch (erro) {
     console.error(`❌ ERRO META (texto):`, erro.response?.data || erro.message);
+    return null;
   }
 }
 
-async function enviarImagem(to, imageUrl, caption = "") {
+async function enviarImagem(to, imageUrl, caption = "", contextMessageId = null) {
   try {
     const response = await axios.post(
       `https://graph.facebook.com/v25.0/${WA_PHONE_ID}/messages`,
@@ -706,6 +713,7 @@ async function enviarImagem(to, imageUrl, caption = "") {
         to,
         type: "image",
         image: { link: imageUrl, caption },
+        ...(contextMessageId ? { context: { message_id: contextMessageId } } : {}),
       },
       {
         headers: {
@@ -716,12 +724,14 @@ async function enviarImagem(to, imageUrl, caption = "") {
       },
     );
     console.log(`✅ IMAGEM ENVIADA para ${to}:`, response.data);
+    return response.data?.messages?.[0]?.id || null;
   } catch (erro) {
     console.error(`❌ ERRO META (imagem):`, erro.response?.data || erro.message);
+    return null;
   }
 }
 
-async function enviarDocumento(to, docUrl, fileName = "arquivo.pdf", caption = "") {
+async function enviarDocumento(to, docUrl, fileName = "arquivo.pdf", caption = "", contextMessageId = null) {
   try {
     const response = await axios.post(
       `https://graph.facebook.com/v25.0/${WA_PHONE_ID}/messages`,
@@ -730,6 +740,7 @@ async function enviarDocumento(to, docUrl, fileName = "arquivo.pdf", caption = "
         to,
         type: "document",
         document: { link: docUrl, filename: fileName, caption },
+        ...(contextMessageId ? { context: { message_id: contextMessageId } } : {}),
       },
       {
         headers: {
@@ -740,8 +751,10 @@ async function enviarDocumento(to, docUrl, fileName = "arquivo.pdf", caption = "
       },
     );
     console.log(`✅ DOCUMENTO ENVIADO para ${to}:`, response.data);
+    return response.data?.messages?.[0]?.id || null;
   } catch (erro) {
     console.error(`❌ ERRO META (documento):`, erro.response?.data || erro.message);
+    return null;
   }
 }
 
