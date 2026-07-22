@@ -1,0 +1,95 @@
+[
+  {
+    "telefone": "5575988887777",
+    "nome": "Atendente",
+    "origem": "atendente",
+    "tipo": "texto",
+    "mensagem": "Mensagem normal sem resposta",
+    "mediaUrl": null,
+    "mimeType": null,
+    "filename": null,
+    "data": "2026-07-16T14:14:40.702-03:00"
+  },
+  {
+    "telefone": "5575988887777",
+    "nome": "Atendente",
+    "origem": "atendente",
+    "tipo": "texto",
+    "mensagem": "Ja te ligo pra combinar!",
+    "mediaUrl": null,
+    "mimeType": null,
+    "filename": null,
+    "data": "2026-07-16T14:14:27.698-03:00"
+  },
+  {
+    "telefone": "5575977775555",
+    "nome": "Bot",
+    "origem": "bot",
+    "tipo": "image",
+    "mensagem": "🦁 *AVSEG Proteção Veicular*\n\nOlá! Seja bem-vindo(a) à AVSEG Proteção Veicular! 👋\n\nComo posso te aj...",
+    "data": "2026-07-13T02:35:02.011-03:00"
+  },
+  {
+    "telefone": "5575977775555",
+    "nome": "Teste Espelho",
+    "origem": "cliente",
+    "tipo": "text",
+    "mensagem": "oi",
+    "mediaUrl": null,
+    "mimeType": null,
+    "filename": null,
+    "data": "2026-07-13T02:35:01.643-03:00"
+  },
+  {
+    "telefone": "5575977776666",
+    "nome": "Bot",
+    "origem": "bot",
+    "tipo": "image",
+    "mensagem": "🦁 *AVSEG Proteção Veicular*\n\nOlá! Seja bem-vindo(a) à AVSEG Proteção Veicular! 👋\n\nComo posso te aj...",
+    "data": "2026-07-13T02:32:23.943-03:00"
+  },
+  {
+    "telefone": "5575977776666",
+    "nome": "Teste Botao",
+    "origem": "cliente",
+    "tipo": "text",
+    "mensagem": "oi",
+    "mediaUrl": null,
+    "mimeType": null,
+    "filename": null,
+    "data": "2026-07-13T02:32:23.553-03:00"
+  },
+  {
+    "telefone": "5575988887777",
+    "nome": "Mario Teste",
+    "origem": "cliente",
+    "tipo": "reaction",
+    "mensagem": "[reaction]",
+    "mediaUrl": null,
+    "mimeType": null,
+    "filename": null,
+    "data": "2026-07-12T23:32:36.658-03:00"
+  },
+  {
+    "telefone": "5575981234567",
+    "nome": "Cliente Teste",
+    "origem": "cliente",
+    "tipo": "text",
+    "mensagem": "Ola, preciso de ajuda",
+    "mediaUrl": null,
+    "mimeType": null,
+    "filename": null,
+    "data": "2026-07-11T19:02:09.859-03:00"
+  },
+  {
+    "telefone": "5575981234567",
+    "nome": "Atendente",
+    "origem": "atendente",
+    "tipo": "text",
+    "mensagem": "oi do atendente",
+    "mediaUrl": null,
+    "mimeType": null,
+    "filename": null,
+    "data": "2026-07-11T19:01:40.724-03:00"
+  }
+]

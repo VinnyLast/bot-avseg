@@ -1382,6 +1382,74 @@ Responda APENAS com uma dessas categorias, sem mais nada.`,
   return validas.includes(categoria) ? categoria : "ERRO_ANALISE";
 }
 
+// =============================================================================
+// COMPROVANTE DE PAGAMENTO — VERIFICAÇÃO COM IA (imagem ou PDF)
+// =============================================================================
+// O beneficiário do pagamento é sempre o mesmo CNPJ (intermediadora de
+// pagamento), independente do banco/app que o associado usa pra pagar —
+// por isso a verificação é por CNPJ, não por nome de banco.
+const COMPROVANTE_CNPJ_BENEFICIARIO = "52.331.474/0001-10"; // FINFINE INSTITUICAO DE PAGAMENTO LTDA.
+const COMPROVANTE_CNPJ_BENEFICIARIO_FINAL = "30.017.274/0001-54"; // AVSEG
+
+async function analisarComprovantePagamento(base64, mediaType) {
+  try {
+    const ehPdf = mediaType === "application/pdf";
+    const blocoConteudo = ehPdf
+      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
+      : { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } };
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 250,
+        messages: [{
+          role: "user",
+          content: [
+            blocoConteudo,
+            {
+              type: "text",
+              text: `Você está verificando se este arquivo é um comprovante de pagamento válido e completo, enviado por um associado da AVSEG Proteção Veicular. Pode vir de qualquer banco ou app (Mercado Pago, Bradesco, Itaú, Caixa, Nubank, PicPay, etc.) — o formato visual muda, mas o beneficiário do pagamento é sempre o mesmo:
+
+- CNPJ do beneficiário/recebedor: ${COMPROVANTE_CNPJ_BENEFICIARIO} (razão social "FINFINE INSTITUICAO DE PAGAMENTO LTDA.")
+- E/ou beneficiário final: "AVSEG" — CNPJ ${COMPROVANTE_CNPJ_BENEFICIARIO_FINAL}
+
+Verifique estes 4 pontos:
+1. É um comprovante de pagamento de verdade (PIX, boleto pago, transferência) — não print de outra coisa.
+2. Mostra status de pagamento CONCLUÍDO/CONFIRMADO (não pendente, agendado, cancelado ou falho).
+3. Tem valor, data e algum código de autenticação/transação/protocolo visíveis.
+4. O CNPJ do beneficiário/recebedor bate com ${COMPROVANTE_CNPJ_BENEFICIARIO} e/ou o beneficiário final é "AVSEG" (CNPJ ${COMPROVANTE_CNPJ_BENEFICIARIO_FINAL}) — não é pagamento pra outra empresa/pessoa.
+
+Responda APENAS em JSON puro, sem markdown, sem \`\`\`, no formato exato:
+{"comprovante": true ou false, "confiante": true ou false, "motivo": "explicação curta em português"}
+
+"confiante" só pode ser true se TODOS os 4 pontos acima forem claramente atendidos e legíveis. Se qualquer um estiver ausente, ilegível, ambíguo, ou o CNPJ do beneficiário não bater com os informados acima, marque "confiante": false.`,
+            },
+          ],
+        }],
+      }),
+    });
+
+    const data = await response.json();
+    const textoResposta = data?.content?.[0]?.text?.trim() || "";
+    const jsonMatch = textoResposta.match(/\{[\s\S]*\}/);
+    const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+    return {
+      comprovante: Boolean(parsed?.comprovante),
+      confiante: Boolean(parsed?.confiante),
+      motivo: parsed?.motivo || "",
+    };
+  } catch (erro) {
+    console.error("❌ Erro ao analisar comprovante:", erro.message);
+    return { comprovante: false, confiante: false, motivo: "erro na análise" };
+  }
+}
+
 async function processarImagemComIA(from, message, nomeCliente, contexto = {}) {
   const nomeClienteValido =
     nomeCliente && nomeCliente !== "Associado" && nomeCliente !== "Cliente" ? nomeCliente : "";
@@ -1402,11 +1470,39 @@ async function processarImagemComIA(from, message, nomeCliente, contexto = {}) {
     console.log(`🖼️ Imagem classificada [${from}]: ${categoria}`);
 
     if (categoria === "COMPROVANTE_PAGAMENTO") {
+      const analise = await analisarComprovantePagamento(base64, mimeType);
+      console.log(`🧾 Comprovante (imagem) analisado [${from}]: confiante=${analise.confiante} — ${analise.motivo}`);
+
+      if (analise.confiante) {
+        await enviarTextoCanal(
+          from,
+          `${saudacao}obrigado por nos avisar! 🤝 Os pagamentos podem levar até 2 dias úteis para serem identificados no sistema. Assim que processado, tudo fica em dia automaticamente.\n\n*AVSEG Proteção Veicular*`,
+          contexto,
+        );
+        return;
+      }
+
+      // IA não teve confiança suficiente (CNPJ não bate, status não confirmado,
+      // dado ilegível, etc.) — trata como comprovante que precisa de humano.
+      const dentroDoHorario = estaEmHorarioAtendimento();
       await enviarTextoCanal(
         from,
-        `${saudacao}obrigado por nos avisar! 🤝 Os pagamentos podem levar até 2 dias úteis para serem identificados no sistema. Assim que processado, tudo fica em dia automaticamente.\n\n*AVSEG Proteção Veicular*`,
+        dentroDoHorario
+          ? `Obrigado pelo envio! 🤝 Um atendente irá verificar em breve.\n\n*AVSEG Proteção Veicular*`
+          : `Obrigado pelo envio! 🤝 Nosso horário de atendimento é:\n\n🗓️ *Segunda a sexta:* 08h às 18h\n🗓️ *Sábado:* 08h às 12h\n\nAssim que retornarmos, seu envio será verificado. ✅\n\n*AVSEG Proteção Veicular*`,
         contexto,
       );
+      modoHumano.add(from);
+      estadoUsuario[from] = null;
+      if (temChatAvsegConfigurado()) sinalizarSolicitouHumanoChatAvseg(from);
+      if (temChatwootConfigurado()) {
+        let convId = contexto.conversationId || obterUltimoCanal(from)?.conversationId;
+        if (!convId) convId = await criarConversaChatwoot(from, nomeCliente || "Associado");
+        if (convId) {
+          atualizarUltimoCanal(from, { conversationId: convId });
+          await enviarTextoChatwoot(convId, `🧾 *IA: comprovante com baixa confiança* — ${analise.motivo || "sem detalhes"}\n📱 +${from}`, true);
+        }
+      }
       return;
     }
 
@@ -1441,11 +1537,10 @@ async function processarImagemComIA(from, message, nomeCliente, contexto = {}) {
     }
 
     if (categoria === "IMAGEM_GENERICA") {
-      await enviarTextoCanal(
-        from,
-        `Que imagem bacana! 😊 Posso te ajudar com algo? Digite *menu* para ver as opções disponíveis.\n\n*AVSEG Proteção Veicular*`,
-        contexto,
-      );
+      // Ruído social (bom dia, meme, foto pessoal) — mesmo tratamento que
+      // texto tipo "obrigado"/"🙏" já recebe: ignora sem responder, mas a
+      // mensagem continua sendo espelhada normalmente no chat-avseg/Chatwoot.
+      console.log(`⏭️ Imagem genérica ignorada pelo bot: ${from}`);
       return;
     }
 
@@ -1686,6 +1781,35 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
     console.log(`🖼️ Imagem recebida: ${from}`);
     await processarImagemComIA(from, message, nomeCliente, contexto);
     return;
+  }
+
+  // PDF — tenta verificar se é comprovante de pagamento válido antes de
+  // cair no fluxo genérico de mídia (que sempre escala pra humano).
+  if (msgType === "document") {
+    const midiaDoc = obterMidiaDaMensagem(message);
+    if (midiaDoc?.mimeType === "application/pdf" && midiaDoc.mediaId) {
+      try {
+        const baixadoDoc = await baixarMidiaMeta(midiaDoc.mediaId);
+        if (baixadoDoc?.buffer) {
+          const base64Doc = baixadoDoc.buffer.toString("base64");
+          const analiseDoc = await analisarComprovantePagamento(base64Doc, "application/pdf");
+          console.log(`🧾 PDF analisado [${from}]: comprovante=${analiseDoc.comprovante} confiante=${analiseDoc.confiante} — ${analiseDoc.motivo}`);
+
+          if (analiseDoc.comprovante && analiseDoc.confiante) {
+            await enviarTextoCanal(
+              from,
+              `Obrigado por nos avisar! 🤝 Os pagamentos podem levar até 2 dias úteis para serem identificados no sistema. Assim que processado, tudo fica em dia automaticamente.\n\n*AVSEG Proteção Veicular*`,
+              contexto,
+            );
+            return;
+          }
+        }
+      } catch (erroDoc) {
+        console.error(`❌ Erro ao analisar PDF [${from}]:`, erroDoc.message);
+      }
+      // Não confirmado (baixa confiança, erro, ou não é comprovante) — cai
+      // pro fluxo de mídia genérica abaixo, que já escala pra humano.
+    }
   }
 
   // Outras mídias — responde confirmando recebimento e escala para humano
