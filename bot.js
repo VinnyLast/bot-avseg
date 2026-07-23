@@ -101,6 +101,11 @@ const TELEFONE_ASSISTENCIA = "0800 130-0078";
 // =============================================================================
 const estadoUsuario = {};
 const modoHumano = new Set();
+// Evita classificar duas imagens do mesmo número em paralelo — comum quando o
+// associado manda várias fotos de vistoria em sequência rápida (sinistro,
+// colisão): sem essa trava, a foto 2 chega antes da foto 1 terminar de ser
+// classificada pela IA e o bot escala/responde duplicado.
+const imagensEmClassificacao = new Set();
 const usuariosOptOut = carregarOptOut();
 const avaliacoes = [];
 const ultimoCanalPorNumero = Object.create(null);
@@ -1451,6 +1456,16 @@ Responda APENAS em JSON puro, sem markdown, sem \`\`\`, no formato exato:
 }
 
 async function processarImagemComIA(from, message, nomeCliente, contexto = {}) {
+  // Já tem uma imagem desse número sendo classificada agora (ex: várias fotos
+  // de vistoria mandadas em sequência) — não dispara outra classificação nem
+  // outra mensagem/escalonamento em cima da mesma leva. A checagem+adição no
+  // Set é síncrona (sem await no meio), então não tem corrida de verdade aqui.
+  if (imagensEmClassificacao.has(from)) {
+    console.log(`⏭️ Imagem extra ignorada (já classificando outra desse número) [${from}]`);
+    return;
+  }
+  imagensEmClassificacao.add(from);
+
   const nomeClienteValido =
     nomeCliente && nomeCliente !== "Associado" && nomeCliente !== "Cliente" ? nomeCliente : "";
   const nomeUsar = nomesAssociados[from] || normalizarNomeAssociado(nomeClienteValido) || "";
@@ -1567,6 +1582,8 @@ async function processarImagemComIA(from, message, nomeCliente, contexto = {}) {
         await enviarTextoChatwoot(convId, `📎 Associado enviou imagem (não classificada). Aguardando verificação.\n📱 +${from}`, true);
       }
     }
+  } finally {
+    imagensEmClassificacao.delete(from);
   }
 }
 
