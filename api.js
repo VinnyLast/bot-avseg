@@ -793,6 +793,44 @@ async function enviarBotaoFalarAtendente(to, texto) {
   }
 }
 
+// Mensagem com até 3 botões de resposta rápida — versão genérica de
+// enviarBotaoFalarAtendente, usada em qualquer submenu curto (ex: Assistência
+// 24h). `botoes` é um array de até 3 itens { id, title }. Título tem limite
+// de 20 caracteres na API da Meta — truncar aqui evita a mensagem inteira
+// falhar silenciosamente por causa de um título longo demais.
+async function enviarBotoes(to, texto, botoes) {
+  try {
+    const response = await axios.post(
+      `https://graph.facebook.com/v25.0/${WA_PHONE_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to,
+        type: "interactive",
+        interactive: {
+          type: "button",
+          body: { text: texto },
+          action: {
+            buttons: botoes.slice(0, 3).map((b) => ({
+              type: "reply",
+              reply: { id: String(b.id), title: String(b.title).slice(0, 20) },
+            })),
+          },
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${WA_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      },
+    );
+    console.log(`✅ BOTÕES ENVIADOS para ${to}:`, response.data);
+  } catch (erro) {
+    console.error(`❌ ERRO META (botões):`, erro.response?.data || erro.message);
+  }
+}
+
 // =============================================================================
 // MENSAGENS
 // =============================================================================
@@ -2154,6 +2192,7 @@ module.exports = {
   enviarTexto,
   enviarImagem,
   enviarBotaoFalarAtendente,
+  enviarBotoes,
   enviarTemplate,
   enviarListaMenu,
   gerarLinkCurto,

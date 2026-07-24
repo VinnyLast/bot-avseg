@@ -19,6 +19,7 @@ const {
   enviarTexto,
   enviarImagem,
   enviarBotaoFalarAtendente,
+  enviarBotoes,
   enviarTemplate,
   enviarListaMenu,
   gerarLinkCurto,
@@ -1660,7 +1661,11 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
       estadoUsuario[from] = null;
       await enviarTextoCanal(from, `💥 *Assistência 24h — Colisão, Acidente, Danos a Terceiros ou Incêndio*\n\n1️⃣ Verifique se há vítimas e acione o *192* (SAMU) ou *193* (Bombeiros) se necessário.\n2️⃣ Em caso de colisão ou danos, ligue para o *190* para registro da ocorrência.\n3️⃣ Em seguida, entre em contato com a nossa Assistência 24 horas:\n\n📞 *${TELEFONE_ASSISTENCIA}*\n\nEstamos aqui para te orientar e prestar todo o suporte necessário.`, contexto);
     } else {
-      await enviarTextoCanal(from, `❌ Opção inválida. Por favor, responda com *1*, *2* ou *3*:\n\n1️⃣ 🚨 Roubo ou Furto\n2️⃣ 🛠️ Pane, Guincho ou Chaveiro\n3️⃣ 💥 Colisão, Acidente ou Incêndio`, contexto);
+      await enviarBotoes(from, `❌ Opção inválida. Selecione uma das opções abaixo:`, [
+        { id: "1", title: "🚨 Roubo ou Furto" },
+        { id: "2", title: "🛠️ Pane ou Guincho" },
+        { id: "3", title: "💥 Colisão/Acidente" },
+      ]);
     }
     return;
   }
@@ -1718,7 +1723,11 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
   if (texto === "3") {
     await registrarAcaoClienteChatwoot(from, "Opção 3 - Acionar Assistência 24h", contexto.conversationId);
     estadoUsuario[from] = "assistencia";
-    await enviarTextoCanal(from, `🚨 *Acione Assistência 24h*\n\nPara receber o atendimento adequado, selecione o que aconteceu:\n\n1️⃣ 🚨 Roubo ou Furto\n2️⃣ 🛠️ Pane, Guincho ou Chaveiro\n3️⃣ 💥 Colisão, Acidente ou Incêndio`, contexto);
+    await enviarBotoes(from, `🚨 *Acione Assistência 24h*\n\nPara receber o atendimento adequado, selecione o que aconteceu:`, [
+      { id: "1", title: "🚨 Roubo ou Furto" },
+      { id: "2", title: "🛠️ Pane ou Guincho" },
+      { id: "3", title: "💥 Colisão/Acidente" },
+    ]);
     return;
   }
 
