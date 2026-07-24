@@ -1447,7 +1447,9 @@ Verifique estes 4 pontos:
 Responda APENAS em JSON puro, sem markdown, sem \`\`\`, no formato exato:
 {"comprovante": true ou false, "confiante": true ou false, "motivo": "explicação curta em português"}
 
-"confiante" só pode ser true se TODOS os 4 pontos acima forem claramente atendidos e legíveis. Se qualquer um estiver ausente, ilegível, ambíguo, ou o CNPJ do beneficiário não bater com os informados acima, marque "confiante": false.`,
+"confiante" só pode ser true se TODOS os 4 pontos acima forem claramente atendidos e legíveis. Se qualquer um estiver ausente, ilegível, ambíguo, ou o CNPJ do beneficiário não bater com os informados acima, marque "confiante": false.
+
+IMPORTANTE sobre o campo "motivo": esta é uma verificação automática limitada — pagamentos legítimos podem ir para outros CNPJs que você não tem como saber que são válidos (ex: conta de sócio, outra forma de recebimento). Por isso, quando "confiante" for false por causa do CNPJ não bater, NÃO afirme que o pagamento está errado/incorreto — apenas descreva o que foi encontrado de forma neutra (ex: "beneficiário identificado como X, CNPJ Y — não está na lista de CNPJs conhecidos, requer confirmação manual"). Nunca declare que o comprovante é inválido ou que o pagamento não foi corretamente direcionado — isso só um atendente humano pode confirmar.`,
             },
           ],
         }],
@@ -1529,7 +1531,7 @@ async function processarImagemComIA(from, message, nomeCliente, contexto = {}) {
         if (!convId) convId = await criarConversaChatwoot(from, nomeCliente || "Associado");
         if (convId) {
           atualizarUltimoCanal(from, { conversationId: convId });
-          await enviarTextoChatwoot(convId, `🧾 *IA: comprovante com baixa confiança* — ${analise.motivo || "sem detalhes"}\n📱 +${from}`, true);
+          await enviarTextoChatwoot(convId, `🧾 *Comprovante recebido — verificação automática não confirmou.* Verificar manualmente.\n\n${analise.motivo || "Sem detalhes da IA."}\n📱 +${from}`, true);
         }
       }
       return;
