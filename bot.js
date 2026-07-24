@@ -1412,6 +1412,7 @@ const COMPROVANTE_CNPJ_BENEFICIARIO_FINAL = "30.017.274/0001-54"; // AVSEG
 
 async function analisarComprovantePagamento(base64, mediaType) {
   try {
+    const hojeFormatado = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
     const ehPdf = mediaType === "application/pdf";
     const blocoConteudo = ehPdf
       ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }
@@ -1433,21 +1434,23 @@ async function analisarComprovantePagamento(base64, mediaType) {
             blocoConteudo,
             {
               type: "text",
-              text: `Você está verificando se este arquivo é um comprovante de pagamento válido e completo, enviado por um associado da AVSEG Proteção Veicular. Pode vir de qualquer banco ou app (Mercado Pago, Bradesco, Itaú, Caixa, Nubank, PicPay, etc.).
+              text: `Você está verificando se este arquivo é um comprovante de pagamento válido e completo, enviado por um associado da AVSEG Proteção Veicular. Pode vir de qualquer banco ou app (Mercado Pago, Bradesco, Itaú, Caixa, Nubank, PicPay, etc.). Hoje é ${hojeFormatado}.
 
 Verifique estes 3 pontos:
 1. É um comprovante de pagamento de verdade (PIX, boleto pago, transferência) — não print de outra coisa.
 2. Mostra status de pagamento CONCLUÍDO/CONFIRMADO (não pendente, agendado, cancelado ou falho).
 3. Tem valor, data e algum código de autenticação/transação/protocolo visíveis.
 
-Além disso, identifique o beneficiário/recebedor do pagamento (nome e CNPJ, se aparecer). A lista de beneficiários já conhecidos como válidos é: CNPJ ${COMPROVANTE_CNPJ_BENEFICIARIO} ("FINFINE INSTITUICAO DE PAGAMENTO LTDA.") e/ou beneficiário final "AVSEG" (CNPJ ${COMPROVANTE_CNPJ_BENEFICIARIO_FINAL}). Essa lista é incompleta de propósito (pagamentos legítimos também podem ir pra outras contas, ex: sócios) — o beneficiário NÃO bater com essa lista não significa que o comprovante está errado, só que não dá pra confirmar automaticamente quem recebeu.
+Além disso, identifique o beneficiário/recebedor do pagamento (nome e CNPJ, se aparecer) — CUIDADO: em comprovantes de apps de banco (Nubank, etc.) costuma aparecer o nome/CNPJ do próprio banco/app num rodapé de "processado por" ou atendimento ao cliente — isso NÃO é o beneficiário, é só a identificação do aplicativo usado por quem pagou. O beneficiário de verdade geralmente aparece em campos como "Favorecido", "Para", "Recebedor" ou "Beneficiário". A lista de beneficiários já conhecidos como válidos é: CNPJ ${COMPROVANTE_CNPJ_BENEFICIARIO} ("FINFINE INSTITUICAO DE PAGAMENTO LTDA.") e/ou beneficiário final "AVSEG" (CNPJ ${COMPROVANTE_CNPJ_BENEFICIARIO_FINAL}). Essa lista é incompleta de propósito (pagamentos legítimos também podem ir pra outras contas, ex: sócios) — o beneficiário NÃO bater com essa lista não significa que o comprovante está errado, só que não dá pra confirmar automaticamente quem recebeu.
+
+Por fim, identifique a data em que o pagamento foi feito (não a data de vencimento) e compare com hoje (${hojeFormatado}).
 
 Responda APENAS em JSON puro, sem markdown, sem \`\`\`, no formato exato:
-{"comprovante": true ou false, "confiante": true ou false, "beneficiarioConhecido": true ou false, "motivo": "explicação curta em português"}
+{"comprovante": true ou false, "confiante": true ou false, "beneficiarioConhecido": true ou false, "atrasado": true ou false, "motivo": "explicação curta em português"}
 
-"confiante" só depende dos 3 pontos acima (comprovante real, status confirmado, dados completos e legíveis) — NÃO depende do beneficiário bater com a lista conhecida. "beneficiarioConhecido" é true só se o CNPJ identificado bater com um dos informados acima.
+"confiante" só depende dos 3 pontos acima (comprovante real, status confirmado, dados completos e legíveis) — NÃO depende do beneficiário bater com a lista conhecida nem de "atrasado". "beneficiarioConhecido" é true só se o CNPJ identificado bater com um dos informados acima. "atrasado" é true só se a data do pagamento (não a de vencimento) já passou de 2 dias corridos antes de hoje.
 
-No campo "motivo": seja sempre neutro e descritivo (ex: "Beneficiário: X, CNPJ Y, valor R$Z, status confirmado"). Nunca declare que o comprovante está errado ou que o pagamento não foi corretamente direcionado — isso só um atendente humano pode confirmar.`,
+No campo "motivo": seja sempre neutro e descritivo (ex: "Beneficiário: X, CNPJ Y, valor R$Z, pago em DD/MM, status confirmado"). Nunca declare que o comprovante está errado ou que o pagamento não foi corretamente direcionado — isso só um atendente humano pode confirmar.`,
             },
           ],
         }],
@@ -1462,11 +1465,12 @@ No campo "motivo": seja sempre neutro e descritivo (ex: "Beneficiário: X, CNPJ 
       comprovante: Boolean(parsed?.comprovante),
       confiante: Boolean(parsed?.confiante),
       beneficiarioConhecido: Boolean(parsed?.beneficiarioConhecido),
+      atrasado: Boolean(parsed?.atrasado),
       motivo: parsed?.motivo || "",
     };
   } catch (erro) {
     console.error("❌ Erro ao analisar comprovante:", erro.message);
-    return { comprovante: false, confiante: false, beneficiarioConhecido: false, motivo: "erro na análise" };
+    return { comprovante: false, confiante: false, beneficiarioConhecido: false, atrasado: false, motivo: "erro na análise" };
   }
 }
 
@@ -1501,7 +1505,30 @@ async function processarImagemComIA(from, message, nomeCliente, contexto = {}) {
 
     if (categoria === "COMPROVANTE_PAGAMENTO") {
       const analise = await analisarComprovantePagamento(base64, mimeType);
-      console.log(`🧾 Comprovante (imagem) analisado [${from}]: confiante=${analise.confiante} beneficiarioConhecido=${analise.beneficiarioConhecido} — ${analise.motivo}`);
+      console.log(`🧾 Comprovante (imagem) analisado [${from}]: confiante=${analise.confiante} beneficiarioConhecido=${analise.beneficiarioConhecido} atrasado=${analise.atrasado} — ${analise.motivo}`);
+
+      if (analise.confiante && analise.atrasado) {
+        // Comprovante válido, mas o pagamento já foi feito há mais de 2 dias —
+        // dado o histórico de atraso da I9 pra refletir pagamento, prioriza
+        // revisão humana em vez de só repetir "aguarde até 2 dias".
+        await enviarTextoCanal(
+          from,
+          `${saudacao}obrigado pelo comprovante! 🤝 Notei que o pagamento já foi feito há alguns dias — vou pedir pra um atendente confirmar com prioridade que já está tudo certo no sistema.\n\n*AVSEG Proteção Veicular*`,
+          contexto,
+        );
+        modoHumano.add(from);
+        estadoUsuario[from] = null;
+        if (temChatAvsegConfigurado()) sinalizarSolicitouHumanoChatAvseg(from);
+        if (temChatwootConfigurado()) {
+          let convId = contexto.conversationId || obterUltimoCanal(from)?.conversationId;
+          if (!convId) convId = await criarConversaChatwoot(from, nomeCliente || "Associado");
+          if (convId) {
+            atualizarUltimoCanal(from, { conversationId: convId });
+            await enviarTextoChatwoot(convId, `🧾 *Comprovante válido, mas pagamento já atrasado (verificar prioridade)*:\n${analise.motivo || "sem detalhes"}\n📱 +${from}`, true);
+          }
+        }
+        return;
+      }
 
       if (analise.confiante) {
         await enviarTextoCanal(
@@ -1834,7 +1861,27 @@ async function processarMensagem({ from, bodyText, origem = "meta", conversation
         if (baixadoDoc?.buffer) {
           const base64Doc = baixadoDoc.buffer.toString("base64");
           const analiseDoc = await analisarComprovantePagamento(base64Doc, "application/pdf");
-          console.log(`🧾 PDF analisado [${from}]: comprovante=${analiseDoc.comprovante} confiante=${analiseDoc.confiante} — ${analiseDoc.motivo}`);
+          console.log(`🧾 PDF analisado [${from}]: comprovante=${analiseDoc.comprovante} confiante=${analiseDoc.confiante} atrasado=${analiseDoc.atrasado} — ${analiseDoc.motivo}`);
+
+          if (analiseDoc.comprovante && analiseDoc.confiante && analiseDoc.atrasado) {
+            await enviarTextoCanal(
+              from,
+              `Obrigado pelo comprovante! 🤝 Notei que o pagamento já foi feito há alguns dias — vou pedir pra um atendente confirmar com prioridade que já está tudo certo no sistema.\n\n*AVSEG Proteção Veicular*`,
+              contexto,
+            );
+            modoHumano.add(from);
+            estadoUsuario[from] = null;
+            if (temChatAvsegConfigurado()) sinalizarSolicitouHumanoChatAvseg(from);
+            if (temChatwootConfigurado()) {
+              let convId = contexto.conversationId || obterUltimoCanal(from)?.conversationId;
+              if (!convId) convId = await criarConversaChatwoot(from, nomeCliente || "Associado");
+              if (convId) {
+                atualizarUltimoCanal(from, { conversationId: convId });
+                await enviarTextoChatwoot(convId, `🧾 *Comprovante (PDF) válido, mas pagamento já atrasado (verificar prioridade)*:\n${analiseDoc.motivo || "sem detalhes"}\n📱 +${from}`, true);
+              }
+            }
+            return;
+          }
 
           if (analiseDoc.comprovante && analiseDoc.confiante) {
             await enviarTextoCanal(
