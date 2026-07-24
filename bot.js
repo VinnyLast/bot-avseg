@@ -1433,23 +1433,21 @@ async function analisarComprovantePagamento(base64, mediaType) {
             blocoConteudo,
             {
               type: "text",
-              text: `Você está verificando se este arquivo é um comprovante de pagamento válido e completo, enviado por um associado da AVSEG Proteção Veicular. Pode vir de qualquer banco ou app (Mercado Pago, Bradesco, Itaú, Caixa, Nubank, PicPay, etc.) — o formato visual muda, mas o beneficiário do pagamento é sempre o mesmo:
+              text: `Você está verificando se este arquivo é um comprovante de pagamento válido e completo, enviado por um associado da AVSEG Proteção Veicular. Pode vir de qualquer banco ou app (Mercado Pago, Bradesco, Itaú, Caixa, Nubank, PicPay, etc.).
 
-- CNPJ do beneficiário/recebedor: ${COMPROVANTE_CNPJ_BENEFICIARIO} (razão social "FINFINE INSTITUICAO DE PAGAMENTO LTDA.")
-- E/ou beneficiário final: "AVSEG" — CNPJ ${COMPROVANTE_CNPJ_BENEFICIARIO_FINAL}
-
-Verifique estes 4 pontos:
+Verifique estes 3 pontos:
 1. É um comprovante de pagamento de verdade (PIX, boleto pago, transferência) — não print de outra coisa.
 2. Mostra status de pagamento CONCLUÍDO/CONFIRMADO (não pendente, agendado, cancelado ou falho).
 3. Tem valor, data e algum código de autenticação/transação/protocolo visíveis.
-4. O CNPJ do beneficiário/recebedor bate com ${COMPROVANTE_CNPJ_BENEFICIARIO} e/ou o beneficiário final é "AVSEG" (CNPJ ${COMPROVANTE_CNPJ_BENEFICIARIO_FINAL}) — não é pagamento pra outra empresa/pessoa.
+
+Além disso, identifique o beneficiário/recebedor do pagamento (nome e CNPJ, se aparecer). A lista de beneficiários já conhecidos como válidos é: CNPJ ${COMPROVANTE_CNPJ_BENEFICIARIO} ("FINFINE INSTITUICAO DE PAGAMENTO LTDA.") e/ou beneficiário final "AVSEG" (CNPJ ${COMPROVANTE_CNPJ_BENEFICIARIO_FINAL}). Essa lista é incompleta de propósito (pagamentos legítimos também podem ir pra outras contas, ex: sócios) — o beneficiário NÃO bater com essa lista não significa que o comprovante está errado, só que não dá pra confirmar automaticamente quem recebeu.
 
 Responda APENAS em JSON puro, sem markdown, sem \`\`\`, no formato exato:
-{"comprovante": true ou false, "confiante": true ou false, "motivo": "explicação curta em português"}
+{"comprovante": true ou false, "confiante": true ou false, "beneficiarioConhecido": true ou false, "motivo": "explicação curta em português"}
 
-"confiante" só pode ser true se TODOS os 4 pontos acima forem claramente atendidos e legíveis. Se qualquer um estiver ausente, ilegível, ambíguo, ou o CNPJ do beneficiário não bater com os informados acima, marque "confiante": false.
+"confiante" só depende dos 3 pontos acima (comprovante real, status confirmado, dados completos e legíveis) — NÃO depende do beneficiário bater com a lista conhecida. "beneficiarioConhecido" é true só se o CNPJ identificado bater com um dos informados acima.
 
-IMPORTANTE sobre o campo "motivo": esta é uma verificação automática limitada — pagamentos legítimos podem ir para outros CNPJs que você não tem como saber que são válidos (ex: conta de sócio, outra forma de recebimento). Por isso, quando "confiante" for false por causa do CNPJ não bater, NÃO afirme que o pagamento está errado/incorreto — apenas descreva o que foi encontrado de forma neutra (ex: "beneficiário identificado como X, CNPJ Y — não está na lista de CNPJs conhecidos, requer confirmação manual"). Nunca declare que o comprovante é inválido ou que o pagamento não foi corretamente direcionado — isso só um atendente humano pode confirmar.`,
+No campo "motivo": seja sempre neutro e descritivo (ex: "Beneficiário: X, CNPJ Y, valor R$Z, status confirmado"). Nunca declare que o comprovante está errado ou que o pagamento não foi corretamente direcionado — isso só um atendente humano pode confirmar.`,
             },
           ],
         }],
@@ -1463,11 +1461,12 @@ IMPORTANTE sobre o campo "motivo": esta é uma verificação automática limitad
     return {
       comprovante: Boolean(parsed?.comprovante),
       confiante: Boolean(parsed?.confiante),
+      beneficiarioConhecido: Boolean(parsed?.beneficiarioConhecido),
       motivo: parsed?.motivo || "",
     };
   } catch (erro) {
     console.error("❌ Erro ao analisar comprovante:", erro.message);
-    return { comprovante: false, confiante: false, motivo: "erro na análise" };
+    return { comprovante: false, confiante: false, beneficiarioConhecido: false, motivo: "erro na análise" };
   }
 }
 
@@ -1502,7 +1501,7 @@ async function processarImagemComIA(from, message, nomeCliente, contexto = {}) {
 
     if (categoria === "COMPROVANTE_PAGAMENTO") {
       const analise = await analisarComprovantePagamento(base64, mimeType);
-      console.log(`🧾 Comprovante (imagem) analisado [${from}]: confiante=${analise.confiante} — ${analise.motivo}`);
+      console.log(`🧾 Comprovante (imagem) analisado [${from}]: confiante=${analise.confiante} beneficiarioConhecido=${analise.beneficiarioConhecido} — ${analise.motivo}`);
 
       if (analise.confiante) {
         await enviarTextoCanal(
@@ -1513,8 +1512,9 @@ async function processarImagemComIA(from, message, nomeCliente, contexto = {}) {
         return;
       }
 
-      // IA não teve confiança suficiente (CNPJ não bate, status não confirmado,
-      // dado ilegível, etc.) — trata como comprovante que precisa de humano.
+      // IA não teve confiança suficiente (não é comprovante de verdade, status
+      // não confirmado, ou dado ilegível/incompleto) — trata como comprovante
+      // que precisa de humano, com a mensagem antiga de sempre.
       const dentroDoHorario = estaEmHorarioAtendimento();
       await enviarTextoCanal(
         from,
