@@ -1113,10 +1113,23 @@ function montarMensagemNotificacao(item) {
 // =============================================================================
 async function iniciarAvaliacao(from, contexto = {}) {
   estadoUsuario[from] = "avaliacao";
-  await enviarTextoCanal(
+  await enviarListaMenu(
     from,
-    `⭐ *Avalie nosso atendimento!*\n\nResponda com um número de *1 a 5*:\n\n1️⃣ — Ruim\n2️⃣ — Regular\n3️⃣ — Bom\n4️⃣ — Ótimo\n5️⃣ — Excelente 😍`,
-    contexto,
+    "⭐ Avalie nosso atendimento",
+    "Como foi sua experiência com a AVSEG hoje? Selecione uma nota:",
+    "Sua opinião nos ajuda a melhorar",
+    [
+      {
+        title: "Nota",
+        rows: [
+          { id: "1", title: "⭐ Ruim", description: "Muito insatisfeito com o atendimento" },
+          { id: "2", title: "⭐⭐ Regular", description: "Atendimento abaixo do esperado" },
+          { id: "3", title: "⭐⭐⭐ Bom", description: "Atendimento satisfatório" },
+          { id: "4", title: "⭐⭐⭐⭐ Ótimo", description: "Atendimento muito bom" },
+          { id: "5", title: "⭐⭐⭐⭐⭐ Excelente", description: "Superou minhas expectativas" },
+        ],
+      },
+    ],
   );
 }
 
