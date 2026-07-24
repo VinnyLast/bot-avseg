@@ -1975,13 +1975,13 @@ Responda SEMPRE em JSON com este formato exato:
 
 ### Tipos de intenção e ações:
 
-**PAGAMENTO_CONFIRMADO** → Associado diz que JÁ pagou, JÁ efetuou o pagamento, JÁ enviou comprovante de PAGAMENTO (ação concluída), sem anexar nada agora (só texto). Atenção: comprovante de pagamento é diferente de vídeo de vistoria.
-- Se o associado NÃO menciona quando pagou, ou menciona uma data/prazo de até 2 dias corridos atrás (contando a partir de hoje, ${hojeFormatado}):
-  - acao: "NENHUMA"
-  - resposta: Agradeça pelo aviso sem confirmar que o pagamento foi recebido. Informe que pagamentos podem levar até 2 dias úteis para serem identificados no sistema e que assim que processado tudo fica em dia automaticamente. Não use palavras como "recebemos", "confirmamos" ou "já está registrado".
-- Se o associado menciona uma data/prazo específico e isso já passou de 2 dias corridos desde hoje (${hojeFormatado}) — ex: "paguei dia 20" quando já é dia 24 ou mais, "paguei semana passada", "paguei há X dias" com X > 2:
-  - acao: "HUMANO"
-  - resposta: Agradeça, reconheça que já passou do prazo normal de identificação, e informe que vai conectar com um atendente pra verificar isso com prioridade.
+**PAGAMENTO_CONFIRMADO** → Associado diz que JÁ pagou, JÁ efetuou o pagamento, JÁ enviou comprovante de PAGAMENTO (ação concluída), sem anexar nada agora (só texto), E não menciona quando pagou OU menciona uma data/prazo de até 2 dias corridos atrás (contando a partir de hoje, ${hojeFormatado}). Atenção: comprovante de pagamento é diferente de vídeo de vistoria.
+- acao: "NENHUMA"
+- resposta: Agradeça pelo aviso sem confirmar que o pagamento foi recebido. Informe que pagamentos podem levar até 2 dias úteis para serem identificados no sistema e que assim que processado tudo fica em dia automaticamente. Não use palavras como "recebemos", "confirmamos" ou "já está registrado".
+
+**PAGAMENTO_CONFIRMADO_ATRASADO** → Igual PAGAMENTO_CONFIRMADO (associado diz que já pagou, só texto, sem anexo), MAS menciona uma data/prazo específico que já passou de 2 dias corridos desde hoje (${hojeFormatado}) — ex: "paguei dia 20" quando já é dia 24 ou mais, "paguei semana passada", "paguei há 4 dias", "paguei há mais de uma semana".
+- acao: "HUMANO"
+- resposta: Agradeça, reconheça que já passou do prazo normal de identificação, e informe que vai conectar com um atendente pra verificar isso com prioridade. NÃO use a frase "pode levar até 2 dias úteis" aqui — o prazo normal já passou, por isso está escalando pra um atendente.
 
 **OFERTA_COMPROVANTE** → Associado diz que TEM o comprovante de PAGAMENTO e QUER enviar, mas ainda não enviou (ex: "tenho o comprovante", "posso enviar", "vou mandar", "estou com o comprovante")
 - acao: "NENHUMA"
